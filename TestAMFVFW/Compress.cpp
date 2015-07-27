@@ -178,11 +178,6 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	mWidth = lpbiIn->biWidth;
 	mHeight = lpbiIn->biHeight;
 
-	if (mConfigTable[S_FPS_ENABLED])
-	{
-		fps_num = mConfigTable[S_FPS_NUM];
-		fps_den = mConfigTable[S_FPS_DEN];
-	}
 	//TODO Check math. In 100-nanoseconds
 	if (fps_num && fps_den)
 		mFrameDuration = ((amf_pts)10000000000 / ((amf_pts)fps_num * 1000 / fps_den));

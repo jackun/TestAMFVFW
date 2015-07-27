@@ -101,6 +101,11 @@ CodecInst::CodecInst()
 	InitSettings();
 	ReadRegistry();
 	mLog = new Logger(!!mConfigTable[S_LOG]);
+	if (mConfigTable[S_FPS_ENABLED])
+	{
+		fps_num = mConfigTable[S_FPS_NUM];
+		fps_den = mConfigTable[S_FPS_DEN];
+	}
 #if _DEBUG
 	FindDLLs();
 #endif
@@ -281,7 +286,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD r, LPVOID) {
 
 CodecInst* Open(ICOPEN* icinfo) {
 	if ((icinfo && icinfo->fccType != ICTYPE_VIDEO))
-		return NULL;
+		return DRVCNF_CANCEL;
 
 	CodecInst* pinst = NULL;
 
@@ -298,7 +303,7 @@ CodecInst* Open(ICOPEN* icinfo) {
 //Something weird goes on with Dxtory
 DWORD Close(CodecInst* pinst) {
 	try {
-		if (pinst && !IsBadWritePtr(pinst, sizeof(CodecInst))){
+		if (pinst) {
 			delete pinst;
 		}
 	}

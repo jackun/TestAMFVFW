@@ -76,8 +76,8 @@ LRESULT __declspec(dllexport) PASCAL DriverProc(DWORD_PTR dwDriverID, HDRVR hDri
 		return (LRESULT)Open((ICOPEN*)lParam2);
 
 	case DRV_CLOSE:
-		if (pi) Close(pi);
-		return (LRESULT)1L;
+		if ((UINT_PTR)pi > 1) Close(pi);
+		return DRV_OK;
 
 		/*********************************************************************
 
