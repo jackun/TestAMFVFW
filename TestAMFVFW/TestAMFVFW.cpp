@@ -22,9 +22,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #pragma comment(lib, "delayimp")
 
 #if _WIN64
+#define LIBEXT L"64"
 #pragma comment(lib, "amf-core-windesktop64")
 //#pragma comment(linker, "/DelayLoad:amf-core-windesktop64.dll")
 #else
+#define LIBEXT L"32"
 #pragma comment(lib, "amf-core-windesktop32.lib")
 //#pragma comment(linker, "/DELAYLOAD:amf-core-windesktop32.dll")
 #endif
@@ -166,9 +168,9 @@ bool CodecInst::FindDLLs()
 	}
 
 	corePath.append(dllPath);
-	corePath.append(L"amf-core-windesktop32.dll");
+	corePath.append(L"amf-core-windesktop" LIBEXT L".dll");
 	vcePath.append(dllPath);
-	vcePath.append(L"amf-component-vce-windesktop32.dll");
+	vcePath.append(L"amf-component-vce-windesktop" LIBEXT L".dll");
 
 	// XXX Kind of a roundabout way of telling /DELAYLOAD where to find the DLLs.
 	hModCore = LoadLibraryW(corePath.c_str());
