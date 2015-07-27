@@ -31,8 +31,13 @@ public:
 	char* mName;
 };
 
+#ifdef _DEBUG
 #define Profile(name) { Timing timing ## name(#name);
 #define EndProfile }
+#else
+#define Profile(name)
+#define EndProfile
+#endif
 
 class Logger
 {
