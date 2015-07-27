@@ -6,6 +6,7 @@ REM set OLDDIR=%CD%
 pushd %~dp0%
 
 REG.exe Query %RegQry% > checkOS.txt
+REG.exe Add HKCU\Software\TestAMFVFW /v InstallPath  /t REG_SZ /f /d "%~dp0%Runtimes"
  
 Find /i "x86" < CheckOS.txt > StringCheck.txt
  
@@ -44,4 +45,4 @@ If %ERRORLEVEL% == 0 (
 )
 
 popd
-REM pause
+pause
