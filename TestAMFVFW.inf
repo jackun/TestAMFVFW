@@ -1,0 +1,63 @@
+[version]
+signature="$CHICAGO$"
+
+[DefaultInstall]
+CopyFiles=ENCODER.Files.Inf,ENCODER.Files.Dll
+AddReg=ENCODER.Reg
+UpdateInis=ENCODER.INIs
+
+[DefaultUnInstall]
+DelFiles=ENCODER.Files.Dll,ENCODER.Files.Inf,ENCODER.Files.Ini
+DelReg=ENCODER.Reg
+UpdateInis=ENCODER.INIs.Del
+
+[SourceDisksNames]
+1="AMD TestAMFVFW video codec","",1
+
+[SourceDisksFiles]
+TestAMFVFW.INF=1
+TestAMFVFW.DLL=1
+
+;[SourceDisksFiles.amd64]
+;TestAMFVFW.INF=1
+;TestAMFVFW.DLL=1,TestAMFVFW64
+
+[DestinationDirs]
+ENCODER.Files.Inf=11
+ENCODER.Files.Dll=11
+ENCODER.Files.Ini=25
+
+;%windir%\inf
+[ENCODER.Files.Inf]
+TestAMFVFW.INF
+
+[ENCODER.Files.Dll]
+TestAMFVFW.DLL
+
+[ENCODER.Files.Ini] 
+TestAMFVFW.INI
+
+; ********************** WARNING ********************
+; Using VIDC.H264 might override preinstalled codecs
+; ***************************************************
+[ENCODER.Reg]
+HKLM,SYSTEM\CurrentControlSet\Control\MediaResources\icm\VIDC.H264,Description,,"TestAMFVFW codec"
+HKLM,SYSTEM\CurrentControlSet\Control\MediaResources\icm\VIDC.H264,Driver,,"TestAMFVFW.DLL"
+HKLM,SYSTEM\CurrentControlSet\Control\MediaResources\icm\VIDC.H264,FriendlyName,,"TestAMFVFW codec"
+
+HKLM,"Software\Microsoft\Windows NT\CurrentVersion\drivers.desc",TestAMFVFW.DLL,,"TestAMFVFW codec"
+HKLM,"Software\Microsoft\Windows NT\CurrentVersion\Drivers32",VIDC.H264,,"TestAMFVFW.DLL"
+
+HKLM,Software\Microsoft\Windows\CurrentVersion\Uninstall\TestAMFVFW
+HKLM,Software\Microsoft\Windows\CurrentVersion\Uninstall\TestAMFVFW,DisplayName,,"TestAMFVFW codec (Remove Only)"
+;http://msdn.microsoft.com/en-us/library/windows/hardware/ff553598%28v=vs.85%29.aspx
+;%11% - %windir%\system32 (gets translated to SysWOW64 if installed from syswow64 folder)
+HKLM,Software\Microsoft\Windows\CurrentVersion\Uninstall\TestAMFVFW,UninstallString,,"rundll32.exe setupapi.dll,InstallHinfSection DefaultUninstall 132 %11%\TestAMFVFW.INF"
+;%17% - use *.inf from %windir%\inf folder
+;HKLM,Software\Microsoft\Windows\CurrentVersion\Uninstall\TestAMFVFW,UninstallString,,"rundll32.exe setupapi.dll,InstallHinfSection DefaultUninstall 132 %17%\TestAMFVFW.INF"
+
+[ENCODER.INIs]
+system.ini, drivers32,, "VIDC.H264=TestAMFVFW.DLL"
+
+[ENCODER.INIs.Del]
+system.ini, drivers32, "VIDC.H264=TestAMFVFW.DLL"

@@ -1,0 +1,5 @@
+LIBRARY	"TestAMFVFW"
+
+EXPORTS
+	DriverProc
+	Configure
