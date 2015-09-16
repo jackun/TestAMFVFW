@@ -6,7 +6,7 @@ VFW glue using AMD's Media SDK (AMF) aka encode video using VCE.
 
 **You may need to install [MSVC++ 2013 runtimes](http://www.microsoft.com/en-us/download/details.aspx?id=40784).**
 
-**NOTE: You need to install x86 version for 32bit codec even if your Windows is 64 bit.**
+**NOTE: You need to install x86 version of the runtime for 32bit codec even if your Windows is 64 bit.**
 
 
 # WIP!!!
