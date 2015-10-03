@@ -480,10 +480,11 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
 
 	EndProfile
 
-	Profile(Conversion)
 
 	if (!mCLConv && mFmtIn != amf::AMF_SURFACE_NV12)
 	{
+		Profile(Conversion)
+
 		res = mConverter->SubmitInput(surfSrc);
 		if (res != AMF_OK)
 			return ICERR_INTERNAL;
@@ -498,9 +499,9 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
 
 		if (convData == NULL)
 			return ICERR_INTERNAL;
-	}
 
-	EndProfile
+		EndProfile
+	}
 
 	Profile(EncoderSubmit)
 
