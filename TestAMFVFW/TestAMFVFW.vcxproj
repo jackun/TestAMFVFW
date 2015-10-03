@@ -119,7 +119,7 @@ copy $(TargetPath) ..\Bin32</Command>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;TESTAMFVFW_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(USERPROFILE)\AMD Media SDK\1.1\inc;$(USERPROFILE)\AMD Media SDK\1.1\inc\amf\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

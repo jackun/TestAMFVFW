@@ -461,7 +461,7 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 			switch (LOWORD(wParam))
 			{
 			case IDC_RCM:
-				pinst->mConfigTable[S_RCM] = SendDlgItemMessage(hwndDlg, IDC_RCM, CB_GETCURSEL, 0, 0);
+				pinst->mConfigTable[S_RCM] = (int)SendDlgItemMessage(hwndDlg, IDC_RCM, CB_GETCURSEL, 0, 0);
 
 				pinst->mDialogUpdated = false;
 				DialogUpdate(hwndDlg, pinst);
@@ -474,12 +474,12 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 				break;
 
 			case IDC_LEVEL:
-				pinst->mConfigTable[S_LEVEL] = SendDlgItemMessage(hwndDlg, IDC_LEVEL, CB_GETCURSEL, 0, 0);
+				pinst->mConfigTable[S_LEVEL] = (int)SendDlgItemMessage(hwndDlg, IDC_LEVEL, CB_GETCURSEL, 0, 0);
 				IdxToLevel(pinst->mConfigTable[S_LEVEL]);
 
 				break;
 			case IDC_PRESET:
-				pinst->mConfigTable[S_PRESET] = SendDlgItemMessage(hwndDlg, IDC_PRESET, CB_GETCURSEL, 0, 0);
+				pinst->mConfigTable[S_PRESET] = (int)SendDlgItemMessage(hwndDlg, IDC_PRESET, CB_GETCURSEL, 0, 0);
 				break;
 			default:
 				return FALSE;
@@ -578,7 +578,7 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 			{
 			case RCM_CQP:
 				pinst->mConfigTable[S_QPI] =
-					SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_GETPOS, 0, 0);
+					(int)SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_GETPOS, 0, 0);
 				SetDlgItemInt(hwndDlg, IDC_RC_VAL, pinst->mConfigTable[S_QPI], FALSE);
 				break;
 

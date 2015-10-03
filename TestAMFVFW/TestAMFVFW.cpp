@@ -97,6 +97,7 @@ CodecInst::CodecInst()
 	, hModVCE(nullptr)
 	, fps_num(30)
 	, fps_den(1)
+	, mCLConv(true)
 {
 	InitSettings();
 	ReadRegistry();

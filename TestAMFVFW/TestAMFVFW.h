@@ -92,7 +92,8 @@ private:
 	unsigned int mCompression;
 	bool mHasIDR;
 	UINT32 mIDRPeriod;
-	UINT32 mCompressedSize;
+	DWORD  mCompressedSize;
+	bool mCLConv;
 
 	/* ICM_COMPRESS_FRAMES_INFO params */
 	int frame_total;

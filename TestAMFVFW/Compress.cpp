@@ -7,6 +7,7 @@
 	do { if(r != AMF_OK) LogMsg(false, __VA_ARGS__); } while(0)
 #define AMFLOGSET(component, var, val) \
 	do { \
+		if(!component) break;\
 		AMF_RESULT r = component->SetProperty(var, val); \
 		if(r != AMF_OK){ \
 			LogMsg(false, L"Failed to set %s.", L#var); \
@@ -17,6 +18,7 @@
 void CodecInst::PrintProps(amf::AMFPropertyStorage *props)
 {
 	amf::AMFBuffer* buffer = nullptr;
+	if (!props) return;
 	amf_size count = props->GetPropertyCount();
 	for (amf_size i = 0; i < count; i++)
 	{
@@ -116,7 +118,7 @@ DWORD CodecInst::CompressQuery(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 }
 
 /* Return the maximum number of bytes a single compressed frame can occupy */
-LRESULT x264vfw_compress_get_size(LPBITMAPINFOHEADER lpbiOut)
+DWORD x264vfw_compress_get_size(LPBITMAPINFOHEADER lpbiOut)
 {
 	return ((lpbiOut->biWidth + 15) & ~15) * ((lpbiOut->biHeight + 31) & ~31) * 3 + 4096;
 }
@@ -218,8 +220,12 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 
 	mDeviceCL.Init(mDeviceDX11.GetDevice(), mWidth, mHeight,
 		mConfigTable[S_COLORPROF] == AMF_VIDEO_CONVERTER_COLOR_PROFILE_601 ? BT601_FULL : BT709_FULL);
-	if ((mFmtIn == amf::AMF_SURFACE_BGRA) && !mDeviceCL.InitBGRAKernels(lpbiIn->biBitCount))
-		goto fail;
+
+	if ((mFmtIn != amf::AMF_SURFACE_BGRA) || !mDeviceCL.InitBGRAKernels(lpbiIn->biBitCount))
+	{
+		mCLConv = false;
+		//goto fail;
+	}
 
 	// Some speed up
 	res = mContext->InitOpenCL(/*NULL*/ mDeviceCL.GetCmdQueue());
@@ -235,7 +241,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_COLOR_PROFILE, mConfigTable[S_COLORPROF]); //AMF_VIDEO_CONVERTER_COLOR_PROFILE_709
 	AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_OUTPUT_SIZE, ::AMFConstructSize(mWidth, mHeight));
 
-	res = mConverter->Init(mFmtIn /*amf::AMF_SURFACE_NV12*/, mWidth, mHeight);
+	res = mConverter->Init(mFmtIn , mWidth, mHeight);
 	if (res != AMF_OK)
 		goto fail;
 
@@ -394,12 +400,14 @@ DWORD CodecInst::CompressFramesInfo(ICCOMPRESSFRAMES *icf)
 	return ICERR_OK;
 }
 
-DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
-
+DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
+{
+#if _DEBUG
+	uint64_t duration;
 	std::chrono::time_point<std::chrono::system_clock> startP, endP;
 	startP = std::chrono::system_clock::now();
+#endif
 
-	uint64_t duration;
 	AMF_RESULT res = AMF_OK;
 	amf::AMFSurfacePtr surfSrc;
 	amf::AMFDataPtr    frameData;
@@ -409,7 +417,8 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 	BITMAPINFOHEADER *inhdr = icinfo->lpbiInput;
 	BITMAPINFOHEADER *outhdr = icinfo->lpbiOutput;
 	int frameType = -1;
-	bool bCLConvert = false;
+
+	outhdr->biCompression = FOURCC_H264;
 
 	//mFrameNum = icinfo->lFrameNum;
 	if (icinfo->lFrameNum == 0){
@@ -424,34 +433,39 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 	}
 
 	Profile(AllocSurface)
-	// Flip it
+
 	if (mFmtIn == amf::AMF_SURFACE_BGRA)
 	{
-		/*res = mContext->AllocSurface(amf::AMF_MEMORY_HOST, mFmtIn, mWidth, mHeight, &surfSrc);
-		if (res != AMF_OK)
-			return ICERR_INTERNAL;
-
-		amf::AMFPlanePtr plane = surfSrc->GetPlaneAt(0);
-		int pitch = plane->GetHPitch();
-		auto ptr = (uint8_t*)plane->GetNative();
-		int inPitch = inhdr->biBitCount / 8 * mWidth;
-
-		for (int h = mHeight - 1; h >= 0; h--, ptr += pitch)
+		if (mCLConv)
 		{
-			memcpy(ptr, (uint8_t*)in + h * inPitch, inPitch);
-		}*/
+			if (!mDeviceCL.ConvertBuffer(in, inhdr->biSizeImage))
+				return ICERR_INTERNAL;
 
-		if(!mDeviceCL.ConvertBuffer(in, inhdr->biSizeImage))
-			return ICERR_INTERNAL;
+			void* imgs[2];
+			mDeviceCL.GetYUVImages(imgs);
+			res = mContext->CreateSurfaceFromOpenCLNative(amf::AMF_SURFACE_NV12,
+				mWidth, mHeight, imgs, &surfSrc, nullptr);
+			if (res != AMF_OK)
+				return ICERR_INTERNAL;
+		}
+		else
+		{
+			res = mContext->AllocSurface(amf::AMF_MEMORY_HOST, mFmtIn, mWidth, mHeight, &surfSrc);
+			if (res != AMF_OK)
+				return ICERR_INTERNAL;
 
-		void* imgs[2];
-		mDeviceCL.GetYUVImages(imgs);
-		res = mContext->CreateSurfaceFromOpenCLNative(amf::AMF_SURFACE_NV12,
-			mWidth, mHeight, imgs, &surfSrc, nullptr);
-		if (res != AMF_OK)
-			return ICERR_INTERNAL;
+			amf::AMFPlanePtr plane = surfSrc->GetPlaneAt(0);
+			int pitch = plane->GetHPitch();
+			auto ptr = (uint8_t*)plane->GetNative();
+			int inPitch = inhdr->biBitCount / 8 * mWidth;
 
-		bCLConvert = true;
+			// Flip it
+			for (int h = mHeight - 1; h >= 0; h--, ptr += pitch)
+			{
+				memcpy(ptr, (uint8_t*)in + h * inPitch, inPitch);
+			}
+		}
+
 	}
 	else
 	{
@@ -460,26 +474,27 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 		if (res != AMF_OK)
 			return ICERR_INTERNAL;
 	}
-	EndProfile
 
 	// In 100-nanoseconds
 	surfSrc->SetPts(mFrameDuration * icinfo->lFrameNum);
 
+	EndProfile
+
 	Profile(Conversion)
-	if (!bCLConvert && mFmtIn != amf::AMF_SURFACE_NV12)
+
+	if (!mCLConv && mFmtIn != amf::AMF_SURFACE_NV12)
 	{
 		res = mConverter->SubmitInput(surfSrc);
 		if (res != AMF_OK)
 			return ICERR_INTERNAL;
 
-		res = AMF_REPEAT;
 		do
 		{
 			res = mConverter->QueryOutput(&convData);
 			if (res != AMF_REPEAT) //OK or some error maybe
 				break;
 			Sleep(1); //Sleep period can be too random though
-		} while (res == AMF_REPEAT);
+		} while (true);
 
 		if (convData == NULL)
 			return ICERR_INTERNAL;
@@ -487,9 +502,9 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 
 	EndProfile
 
-	Profile(Encoder)
+	Profile(EncoderSubmit)
 
-	if (!bCLConvert && mFmtIn != amf::AMF_SURFACE_NV12)
+	if (!mCLConv && mFmtIn != amf::AMF_SURFACE_NV12)
 		res = mEncoder->SubmitInput(convData);
 	else
 		res = mEncoder->SubmitInput(surfSrc);
@@ -497,14 +512,17 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 	if (res != AMF_OK)
 		return ICERR_INTERNAL;
 
-	res = AMF_REPEAT;
+	EndProfile
+
+	Profile(EncoderPoll)
+
 	do
 	{
 		res = mEncoder->QueryOutput(&frameData);
 		if (res != AMF_REPEAT) //OK or some error maybe
 			break;
 		Sleep(1);
-	} while (res == AMF_REPEAT);
+	} while (true);
 
 	if (frameData == NULL)
 		return ICERR_INTERNAL;
@@ -514,9 +532,9 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 	amf::AMFBufferPtr buffer(frameData);
 	//res = buffer->Convert(amf::AMF_MEMORY_HOST); //Maybe?
 	memcpy(out, buffer->GetNative(), buffer->GetSize());
-	mCompressedSize = buffer->GetSize();
-
+	outhdr->biSizeImage = buffer->GetSize();
 	buffer->GetProperty(L"OutputDataType", &frameType);
+
 	EndProfile
 
 	if (frameType == AMF_VIDEO_ENCODER_OUTPUT_DATA_TYPE_IDR)
@@ -527,12 +545,11 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize) {
 	else
 		*icinfo->lpdwFlags = 0;
 
-	outhdr->biSizeImage = mCompressedSize;
-	outhdr->biCompression = FOURCC_H264;
-
+#if _DEBUG
 	endP = std::chrono::system_clock::now();
 	duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endP - startP).count();
 	Dbg(L"Encoding: %fms\n", (duration / 1.0E6));
+#endif
 
 	return ICERR_OK;
 }

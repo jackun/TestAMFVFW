@@ -96,14 +96,17 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 		delete[] exts;
 	}
 
-	clGetDeviceIDsFromD3D11KHR_fn p_clGetDeviceIDsFromD3D11KHR = static_cast<clGetDeviceIDsFromD3D11KHR_fn>(clGetExtensionFunctionAddressForPlatform(platformID, "clGetDeviceIDsFromD3D11KHR"));
+	clGetDeviceIDsFromD3D11KHR_fn p_clGetDeviceIDsFromD3D11KHR = 
+		static_cast<clGetDeviceIDsFromD3D11KHR_fn>
+		(clGetExtensionFunctionAddressForPlatform(platformID, "clGetDeviceIDsFromD3D11KHR"));
 	if (!p_clGetDeviceIDsFromD3D11KHR)
 	{
 		Log(L"Cannot resolve ClGetDeviceIDsFromD3D11KHR function.\n");
 		return false;
 	}
 
-	status = p_clGetDeviceIDsFromD3D11KHR(platformID, CL_D3D11_DEVICE_KHR, (void*)pD3DDevice, CL_PREFERRED_DEVICES_FOR_D3D11_KHR, 1, &mDevice, NULL);
+	status = p_clGetDeviceIDsFromD3D11KHR(platformID, CL_D3D11_DEVICE_KHR,
+		(void*)pD3DDevice, CL_PREFERRED_DEVICES_FOR_D3D11_KHR, 1, &mDevice, NULL);
 	RETURNIFERROR(status, L"clGetDeviceIDsFromD3D11KHR() failed.\n");
 
 	status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, 0, nullptr, &strSize);
@@ -142,7 +145,7 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	const char* source = (const char*)LoadResource(hmoduleVFW, hResource);
 	size_t srcSize[] = { strlen(source) };
 
-	Dbg(L"%S\n\n", source);
+	//Dbg(L"%S\n\n", source);
 	mProgram = clCreateProgramWithSource(mContext, 1, &source, srcSize, &status);
 	RETURNIFERROR(status, L"clCreateProgramWithSource failed.\n");
 
@@ -313,6 +316,7 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size)
 	RETURNIFERROR(status, L"clEnqueueMapBuffer() failed.\n");
 
 	memcpy(mapPtr, inBuf, size);
+
 	status = clEnqueueUnmapMemObject(mCmdQueue,
 		mInBuf,
 		mapPtr,
@@ -326,14 +330,16 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size)
 	EndProfile
 
 	Profile(EnqNDR)
-	status = clEnqueueNDRangeKernel(mCmdQueue, mKernelY, 2, nullptr, globalThreads, nullptr, 0, nullptr, &ndrEvents[0]);
+	status = clEnqueueNDRangeKernel(mCmdQueue, mKernelY, 2, nullptr,
+		globalThreads, nullptr, 0, nullptr, &ndrEvents[0]);
 	RETURNIFERROR(status, L"Failed to enqueue Y kernel.\n");
 
 	//TODO off by one probably
 	globalThreads[0] = mWidth & 1 ? (mWidth + 1) / 2 : mWidth / 2;
 	globalThreads[1] = mHeight & 1 ? (mHeight - 1) / 2 : mHeight / 2;
 
-	status = clEnqueueNDRangeKernel(mCmdQueue, mKernelUV, 2, nullptr, globalThreads, nullptr, 0, nullptr, &ndrEvents[1]);
+	status = clEnqueueNDRangeKernel(mCmdQueue, mKernelUV, 2, nullptr,
+		globalThreads, nullptr, 0, nullptr, &ndrEvents[1]);
 	RETURNIFERROR(status, L"Failed to enqueue UV kernel.\n");
 
 	status = clWaitForEvents(2, ndrEvents);
