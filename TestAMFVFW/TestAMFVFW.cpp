@@ -149,7 +149,10 @@ bool CodecInst::FindDLLs()
 
 	if (RegOpenKeyEx(OVE_REG_KEY, OVE_REG_PARENT TEXT("\\") OVE_REG_CHILD, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
 	{
-		return false;
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, OVE_REG_PARENT TEXT("\\") OVE_REG_CHILD, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+		{
+			return false;
+		}
 	}
 
 	i_size = sizeof(path);// / sizeof(path[0]);
