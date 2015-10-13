@@ -225,7 +225,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	{
 		mCLConv = false;
 		//TODO 24bit RGB non-CL conversion
-		if (lpbiIn->biBitCount != 32)
+		if (lpbiIn->biBitCount == 24)
 			goto fail;
 	}
 
