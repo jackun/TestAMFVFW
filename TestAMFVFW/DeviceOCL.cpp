@@ -143,7 +143,7 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	}
 
 	const char* source = (const char*)LoadResource(hmoduleVFW, hResource);
-	size_t srcSize[] = { strlen(source) };
+	size_t srcSize[] = { SizeofResource(hmoduleVFW, hResource) };
 
 	//Dbg(L"%S\n\n", source);
 	mProgram = clCreateProgramWithSource(mContext, 1, &source, srcSize, &status);
