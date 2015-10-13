@@ -85,7 +85,9 @@ DWORD CodecInst::CompressQuery(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 
 	// check for valid format and bitdepth
 	if (lpbiIn->biCompression == 0){
-		if (/*lpbiIn->biBitCount != 24 &&*/ lpbiIn->biBitCount != 32)
+		if (!mCLConv && lpbiIn->biBitCount == 24)
+			return (DWORD)ICERR_BADFORMAT;
+		else if (lpbiIn->biBitCount != 24 && lpbiIn->biBitCount != 32)
 			return (DWORD)ICERR_BADFORMAT;
 	}
 	/*else if ( lpbiIn->biCompression == FOURCC_YUY2 || lpbiIn->biCompression == FOURCC_UYVY || lpbiIn->biCompression == FOURCC_YV16 ){
@@ -165,8 +167,6 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	AMF_RESULT res = AMF_OK;
 	amf::H264EncoderCapsPtr encCaps;
 
-	if (mLog) mLog->enableLog(!!mConfigTable[S_LOG]);
-
 	if (started == 0x1337){
 		CompressEnd();
 	}
@@ -179,11 +179,10 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	started = 0x1337;
 	mWidth = lpbiIn->biWidth;
 	mHeight = lpbiIn->biHeight;
-
+	mIDRPeriod = mConfigTable[S_IDR];
 	//TODO Check math. In 100-nanoseconds
 	if (fps_num && fps_den)
 		mFrameDuration = ((amf_pts)10000000000 / ((amf_pts)fps_num * 1000 / fps_den));
-	mIDRPeriod = mConfigTable[S_IDR];
 
 	mFmtIn = amf::AMF_SURFACE_BGRA;
 	switch (lpbiIn->biCompression)
@@ -191,7 +190,8 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	case FOURCC_NV12: mFmtIn = amf::AMF_SURFACE_NV12; break;
 	case FOURCC_YV12: mFmtIn = amf::AMF_SURFACE_YV12; break;
 	case 0:
-		if (lpbiIn->biBitCount == 32)
+		if (lpbiIn->biBitCount == 32 
+			|| (mCLConv && (lpbiIn->biBitCount == 32 || lpbiIn->biBitCount == 24)))
 			mFmtIn = amf::AMF_SURFACE_BGRA;
 		else
 		{
@@ -224,7 +224,9 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	if ((mFmtIn != amf::AMF_SURFACE_BGRA) || !mDeviceCL.InitBGRAKernels(lpbiIn->biBitCount))
 	{
 		mCLConv = false;
-		//goto fail;
+		//TODO 24bit RGB non-CL conversion
+		if (lpbiIn->biBitCount != 32)
+			goto fail;
 	}
 
 	// Some speed up
@@ -438,6 +440,7 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
 	{
 		if (mCLConv)
 		{
+			// Convert RGB24|32 to NV12 with OpenCL
 			if (!mDeviceCL.ConvertBuffer(in, inhdr->biSizeImage))
 				return ICERR_INTERNAL;
 
@@ -450,6 +453,7 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
 		}
 		else
 		{
+			// Copy and flip RGB32 to AMF surface
 			res = mContext->AllocSurface(amf::AMF_MEMORY_HOST, mFmtIn, mWidth, mHeight, &surfSrc);
 			if (res != AMF_OK)
 				return ICERR_INTERNAL;
