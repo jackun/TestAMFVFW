@@ -4,6 +4,10 @@ Testing, testing...
 
 VFW glue using AMD's Media SDK (AMF) aka encode video using VCE.
 
+# Installing
+
+Click `Download ZIP` and unpack somewhere permanent. Codec needs to find the AMF DLLs from the `Runtimes` folder.
+
 **You may need to install [MSVC++ 2013 runtimes](http://www.microsoft.com/en-us/download/details.aspx?id=40784).**
 
 **NOTE: You need to install x86 version of the runtime for 32bit codec even if your Windows is 64 bit.**
