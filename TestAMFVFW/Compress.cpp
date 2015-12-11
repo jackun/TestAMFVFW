@@ -168,6 +168,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	amf::H264EncoderCapsPtr encCaps;
 
 	if (started == 0x1337){
+		LogMsg(false, L"CompressBegin: already began compressing, exiting...");
 		CompressEnd();
 	}
 	started = 0;
