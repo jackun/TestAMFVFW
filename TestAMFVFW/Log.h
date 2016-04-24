@@ -44,6 +44,7 @@ class Logger
 private:
 	FILE* mLog;
 	bool mWritelog;
+	std::wstring mUserProfile;
 public:
 	Logger(bool _log);
 	~Logger();
