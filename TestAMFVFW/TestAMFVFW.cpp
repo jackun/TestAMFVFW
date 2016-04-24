@@ -171,7 +171,7 @@ bool CodecInst::FindDLLs()
 		goto quit;
 	}
 
-	if (dllPath.back() != L'\\' || dllPath.back() != L'/')
+	if (dllPath.back() != L'\\' && dllPath.back() != L'/')
 	{
 		dllPath.append(L"\\");
 	}
