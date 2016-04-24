@@ -3,7 +3,7 @@
 
 #include <debugapi.h>
 #if _DEBUG
-#define Dbg(...) OutDebug(__VA_ARGS__)
+#define Dbg(fmt, ...) OutDebug(fmt, ##__VA_ARGS__)
 #else
 #define Dbg
 #endif
