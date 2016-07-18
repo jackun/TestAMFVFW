@@ -483,6 +483,9 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 			case IDC_PRESET:
 				pinst->mConfigTable[S_PRESET] = (int)SendDlgItemMessage(hwndDlg, IDC_PRESET, CB_GETCURSEL, 0, 0);
 				break;
+			case IDC_COLOR_PROFILE:
+				pinst->mConfigTable[S_COLORPROF] = (int)SendDlgItemMessage(hwndDlg, IDC_COLOR_PROFILE, CB_GETCURSEL, 0, 0);
+				break;
 			default:
 				return FALSE;
 			}
