@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef TESTAMFVFW_H
 #define TESTAMFVFW_H
 
+#include "BufferCopyManager.h"
 #include "DeviceDX11.h"
 #include <d3dcompiler.h>
 #include "DeviceOCL.h"
@@ -250,6 +251,7 @@ public:
 	ID3D11UnorderedAccessView	*mUavNV12[2] = { nullptr, nullptr };
 	ID3D11ComputeShader*		mComputeShader;
 	ID3D11Buffer* mConstantBuf;
+	BufferCopyManager mBufferCopyManager;
 
 	DX11ComputeSubmitter(CodecInst *instance) : mInstance(instance)
 		, mSrcBufferView(nullptr)

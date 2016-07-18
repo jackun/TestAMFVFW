@@ -4,6 +4,7 @@
 #include <CL/cl_ext.h>
 #include <CL/cl_d3d11.h>
 #include "Colorspace.h"
+#include "BufferCopyManager.h"
 
 class DeviceOCL
 {
@@ -33,7 +34,7 @@ public:
 
 private:
 	bool FindPlatformID(cl_platform_id &platform);
-	bool setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output);
+	bool setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem outputY, cl_mem outputUV);
 
 	cl_device_id mDevice;
 	cl_context mContext;
@@ -42,4 +43,5 @@ private:
 	cl_program mProgram;
 	cl_mem mInBuf, mOutImgY, mOutImgUV, mBuffY, mBuffUV;
 	int mWidth, mHeight, mAlignedWidth, mAlignedHeight;
+	BufferCopyManager mBufferCopyManager;
 };

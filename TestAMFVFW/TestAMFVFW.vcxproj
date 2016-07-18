@@ -200,6 +200,7 @@ copy $(TargetPath) ..\Bin64</Command>
     <ClCompile Include="TestAMFVFW.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BufferCopyManager.h" />
     <ClInclude Include="Colorspace.h" />
     <ClInclude Include="ComPtr.h" />
     <ClInclude Include="DeviceDX11.h" />

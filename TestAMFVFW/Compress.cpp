@@ -872,6 +872,8 @@ bool DX11ComputeSubmitter::Init()
 		return false;
 	}
 
+	mBufferCopyManager.Start(3);
+
 	return true;
 }
 
@@ -933,9 +935,15 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 	if (FAILED(mImmediateContext->Map(mSrcBuffer, 0, D3D11_MAP_WRITE /*_DISCARD*/, 0, &map)))
 		return ICERR_INTERNAL;
 
-	memcpy(map.pData, data, inhdr->biSizeImage);
+	//memcpy(map.pData, data, inhdr->biSizeImage);
+
+	mBufferCopyManager.SetData(data, map.pData, inhdr->biSizeImage);
+	DWORD ret = mBufferCopyManager.Wait();
 
 	mImmediateContext->Unmap(mSrcBuffer, 0);
+	if (ret == WAIT_TIMEOUT)
+		return ICERR_INTERNAL;
+
 	EndProfile
 
 	Profile(Compute)

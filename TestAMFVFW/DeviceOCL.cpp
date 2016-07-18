@@ -84,6 +84,9 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	if (!FindPlatformID(platformID))
 		return false;
 
+	if ((width & 1) || (height & 1)) // not divisible by 2, bugger off
+		return false;
+
 	mWidth = width;
 	mHeight = height;
 	mAlignedWidth = ((width + (256 - 1)) & ~(256 - 1));
@@ -264,8 +267,8 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 	}
 
 	const char* kernels[][2] = {
-		{ "BGRAtoNV12_Y", "BGRAtoNV12_UV" },
-		{ "BGRtoNV12_Y", "BGRtoNV12_UV" },
+		{ "BGRAtoNV12_YUV", "BGRAtoNV12_UV" },
+		{ "BGRtoNV12_YUV", "BGRtoNV12_UV" },
 	};
 
 	cl_int status = 0;
@@ -274,8 +277,8 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 	mKernelY = clCreateKernel(mProgram, kernels[kernel][0], &status);
 	RETURNIFERROR(status, L"clCreateKernel(Y) failed!\n");
 
-	mKernelUV = clCreateKernel(mProgram, kernels[kernel][1], &status);
-	RETURNIFERROR(status, L"clCreateKernel(UV) failed!\n");
+	//mKernelUV = clCreateKernel(mProgram, kernels[kernel][1], &status);
+	//RETURNIFERROR(status, L"clCreateKernel(UV) failed!\n");
 
 	int inSize = mWidth * mHeight * bpp / 8 + ((mWidth * bpp / 8) % 4) * mHeight;
 	int inSizeAligned = (inSize + 255) & ~255; //unnecessery?
@@ -289,14 +292,18 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 		&status);
 	RETURNIFERROR(status, L"clCreateBuffer failed!\n");
 
-	if (!setKernelArgs(mKernelY, mInBuf, mOutImgY) ||
+	/*if (!setKernelArgs(mKernelY, mInBuf, mOutImgY) ||
 		!setKernelArgs(mKernelUV, mInBuf, mOutImgUV))
+		return false;*/
+
+	if (!setKernelArgs(mKernelY, mInBuf, mOutImgY, mOutImgUV))
 		return false;
 
+	mBufferCopyManager.Start(3);
 	return true;
 }
 
-bool DeviceOCL::setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output)
+bool DeviceOCL::setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output, cl_mem outputUV)
 {
 	cl_int status = 0;
 
@@ -307,8 +314,11 @@ bool DeviceOCL::setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output)
 	status = clSetKernelArg(kernel, 1, sizeof(cl_mem), &output);
 	RETURNIFERROR(status, L"clSetKernelArg(output) failed!\n");
 
-	status = clSetKernelArg(kernel, 2, sizeof(int), &mAlignedWidth);
-	RETURNIFERROR(status, L"clSetKernelArg(alignedWidth) failed!\n");
+	status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &outputUV);
+	RETURNIFERROR(status, L"clSetKernelArg(output) failed!\n");
+
+	//status = clSetKernelArg(kernel, 2, sizeof(int), &mAlignedWidth);
+	//RETURNIFERROR(status, L"clSetKernelArg(alignedWidth) failed!\n");
 	return true;
 }
 
@@ -317,7 +327,7 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 	cl_int status = 0;
 	cl_event unmapEvent;
 	cl_event ndrEvents[2];
-	size_t globalThreads[] = { mWidth, mHeight };
+	size_t globalThreads[] = { mWidth>>1, mHeight>>1 };
 
 	Profile(MapBuffer)
 	void *mapPtr = clEnqueueMapBuffer(mCmdQueue,
@@ -333,7 +343,9 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 		&status);
 	RETURNIFERROR(status, L"clEnqueueMapBuffer() failed.\n");
 
-	memcpy(mapPtr, inBuf, size);
+	//memcpy(mapPtr, inBuf, size);
+	mBufferCopyManager.SetData(inBuf, mapPtr, size);
+	mBufferCopyManager.Wait();
 
 	status = clEnqueueUnmapMemObject(mCmdQueue,
 		mInBuf,
@@ -350,22 +362,23 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 	EndProfile
 
 	Profile(EnqNDR)
+
 	status = clEnqueueNDRangeKernel(mCmdQueue, mKernelY, 2, nullptr,
 		globalThreads, nullptr, 0, nullptr, &ndrEvents[0]);
 	RETURNIFERROR(status, L"Failed to enqueue Y kernel.\n");
 
 	//TODO off by one probably
-	globalThreads[0] = mWidth & 1 ? (mWidth + 1) / 2 : mWidth / 2;
-	globalThreads[1] = mHeight & 1 ? (mHeight - 1) / 2 : mHeight / 2;
+	//globalThreads[0] = mWidth & 1 ? (mWidth + 1) / 2 : mWidth / 2;
+	//globalThreads[1] = mHeight & 1 ? (mHeight - 1) / 2 : mHeight / 2;
 
-	status = clEnqueueNDRangeKernel(mCmdQueue, mKernelUV, 2, nullptr,
+	/*status = clEnqueueNDRangeKernel(mCmdQueue, mKernelUV, 2, nullptr,
 		globalThreads, nullptr, 0, nullptr, &ndrEvents[1]);
-	RETURNIFERROR(status, L"Failed to enqueue UV kernel.\n");
+	RETURNIFERROR(status, L"Failed to enqueue UV kernel.\n");*/
 
-	status = clWaitForEvents(2, ndrEvents);
+	status = clWaitForEvents(1, ndrEvents);
 	if (status != CL_SUCCESS) Log(L"clWaitForEvents(ndrEvents) failed: %d.\n", status);
 	clReleaseEvent(ndrEvents[0]);
-	clReleaseEvent(ndrEvents[1]);
+	//clReleaseEvent(ndrEvents[1]);
 	//clFinish(mCmdQueue);
 
 	//slow and fuxxored

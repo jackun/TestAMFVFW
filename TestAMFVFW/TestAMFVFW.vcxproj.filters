@@ -62,6 +62,9 @@
     <ClInclude Include="DeviceOCL.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="BufferCopyManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="Source.def">
