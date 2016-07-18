@@ -963,7 +963,11 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 	mImmediateContext->CSSetUnorderedAccessViews(0, 2, mUavNV12, NULL);
 	mImmediateContext->CSSetConstantBuffers(0, 1, &mConstantBuf);
 
-	mImmediateContext->Dispatch(w / 2, h / 2, 1);
+	// shader samples 2x2 box so run over half the image size and divided by numthreads
+	//TODO aligning over image bounds for non-multiple of 32x16 frames, shader didn't seem to mind
+	int dx = ((w + 31) & ~31) / 32;
+	int dy = ((h + 15) & ~15) / 16;
+	mImmediateContext->Dispatch(dx, dy, 1);
 
 	// Restore state
 	mImmediateContext->CSSetShader(tmpShader, tmpClass.data(), tmpClass.size());

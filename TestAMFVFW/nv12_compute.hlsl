@@ -29,30 +29,25 @@ float4 readPixel(int x, int y)
 	return output;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(16, 8, 1)]
 void CSMain( uint3 dispatchThreadID : SV_DispatchThreadID )
 {
 	uint w, h;
 	BufferOut.GetDimensions(w, h);
-	//BufferOut[dispatchThreadID.xy] = 0xFF000000 | (uint)((dispatchThreadID.x) / 32.f * 0xFF) | (uint)(dispatchThreadID.y / (float)h * 0xFF) << 8;
+	float4 px[4];
 
 	for (int j = 0; j < 2; j++)
 	for (int i = 0; i < 2; i++)
 	{
 		float4 pixel = readPixel(dispatchThreadID.x * 2 + i, dispatchThreadID.y * 2 + j);
-		//writeToPixel(dispatchThreadID.x * 2 + i, dispatchThreadID.y + j, float4(Y, Y, Y, 255.f));
+		px[j * 2 + i] = pixel;
 		BufferOut[uint2(dispatchThreadID.x * 2 + i, h - (dispatchThreadID.y * 2 + j) - 1)] = uint(dot(pixel, YcoeffB));
 	}
 
-	float4 p00 = readPixel(dispatchThreadID.x * 2, dispatchThreadID.y * 2);
-	float4 p10 = readPixel(dispatchThreadID.x * 2 + 1, dispatchThreadID.y * 2);
-	float4 p01 = readPixel(dispatchThreadID.x * 2, dispatchThreadID.y * 2 + 1);
-	float4 p11 = readPixel(dispatchThreadID.x * 2 + 1, dispatchThreadID.y * 2 + 1);
-
-	float2 UV00 = float2(dot(p00, UcoeffB), dot(p00, VcoeffB));
-	float2 UV10 = float2(dot(p10, UcoeffB), dot(p10, VcoeffB));
-	float2 UV01 = float2(dot(p01, UcoeffB), dot(p01, VcoeffB));
-	float2 UV11 = float2(dot(p11, UcoeffB), dot(p11, VcoeffB));
+	float2 UV00 = float2(dot(px[0], UcoeffB), dot(px[0], VcoeffB));
+	float2 UV10 = float2(dot(px[1], UcoeffB), dot(px[1], VcoeffB));
+	float2 UV01 = float2(dot(px[2], UcoeffB), dot(px[2], VcoeffB));
+	float2 UV11 = float2(dot(px[3], UcoeffB), dot(px[3], VcoeffB));
 
 	float2 UV = (UV00 + UV10 + UV01 + UV11) / 4;
 	BufferUV.GetDimensions(w, h);
