@@ -5,7 +5,7 @@
 #if _DEBUG
 #define Dbg(fmt, ...) OutDebug(fmt, ##__VA_ARGS__)
 #else
-#define Dbg
+#define Dbg(fmt, ...) do{}while(0)
 #endif
 
 void OutDebug(const wchar_t* psz_fmt, ...);
@@ -13,9 +13,9 @@ void OutDebug(const wchar_t* psz_fmt, ...);
 struct Timing
 {
 public:
-	Timing(char *name)
+	Timing(const char *name)
 		: mName(name)
-		, startP(std::chrono::system_clock::now())
+		, startP(std::chrono::high_resolution_clock::now())
 	{
 
 	}
@@ -23,12 +23,12 @@ public:
 	~Timing()
 	{
 		auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>
-			(std::chrono::system_clock::now() - startP).count();
+			(std::chrono::high_resolution_clock::now() - startP).count();
 		Dbg(L"Timing(%S): %fms\n", mName, (duration / 1.0E6));
 	}
 
-	std::chrono::time_point<std::chrono::system_clock> startP;
-	char* mName;
+	std::chrono::time_point<std::chrono::high_resolution_clock> startP;
+	const char* mName;
 };
 
 #ifdef _DEBUG

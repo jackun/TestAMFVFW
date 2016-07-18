@@ -221,6 +221,7 @@ void CodecInst::InitSettings()
 	mConfigTable[S_FPS_NUM] = 30;
 	mConfigTable[S_FPS_DEN] = 1;
 	mConfigTable[S_FPS_ENABLED] = 0;
+	mConfigTable[S_DISABLE_OCL] = 0;
 }
 
 bool CodecInst::ReadRegistry()
@@ -430,6 +431,7 @@ static void DialogUpdate(HWND hwndDlg, CodecInst* pinst) {
 	CheckDlgButton(hwndDlg, IDC_CABAC, pinst->mConfigTable[S_CABAC]);
 	CheckDlgButton(hwndDlg, IDC_LOG, pinst->mConfigTable[S_LOG]);
 	CheckDlgButton(hwndDlg, IDC_FPS, pinst->mConfigTable[S_FPS_ENABLED]);
+	CheckDlgButton(hwndDlg, IDC_OPENCL, pinst->mConfigTable[S_DISABLE_OCL]);
 
 	swprintf(temp, 1023, TEXT("Build date: %S %S"), __DATE__, __TIME__);
 	SetDlgItemText(hwndDlg, IDC_BUILD_DATE, temp);
@@ -502,6 +504,9 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 				break;
 			case IDC_LOG:
 				pinst->mConfigTable[S_LOG] = IsDlgButtonChecked(hwndDlg, IDC_LOG);
+				break;
+			case IDC_OPENCL:
+				pinst->mConfigTable[S_DISABLE_OCL] = IsDlgButtonChecked(hwndDlg, IDC_OPENCL);
 				break;
 			case IDC_FPS:
 				pinst->mConfigTable[S_FPS_ENABLED] = IsDlgButtonChecked(hwndDlg, IDC_FPS);

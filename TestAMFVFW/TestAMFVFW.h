@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define TESTAMFVFW_H
 
 #include "DeviceDX11.h"
+#include <d3dcompiler.h>
 #include "DeviceOCL.h"
 #include "Log.h"
 #include "Colorspace.h"
@@ -58,6 +59,7 @@ extern CRITICAL_SECTION lockCS;
 #define S_FPS_NUM     "FPSnum"
 #define S_FPS_DEN     "FPSden"
 #define S_FPS_ENABLED "FPSEnabled"
+#define S_DISABLE_OCL "DisableOpenCL"
 
 #define S_INSTALL     "InstallPath"
 
@@ -71,7 +73,40 @@ enum RCM {
 amf_pts AMF_STD_CALL amf_high_precision_clock();
 void AMF_STD_CALL amf_increase_timer_precision();
 
+template <class T> void SafeRelease(T **ptr)
+{
+	if (ptr && *ptr)
+	{
+		(*ptr)->Release();
+		(*ptr) = nullptr;
+	}
+}
+
+class Submitter
+{
+public:
+	virtual DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts) = 0;
+	virtual ~Submitter() {}
+	virtual bool Init()
+	{
+		return true;
+	}
+};
+
+class NV12Submitter;
+class AMFConverterSubmitter;
+class OpenCLSubmitter;
+class DX11Submitter;
+class DX11ComputeSubmitter;
+
 class CodecInst {
+	// Ehhhhh
+	friend class Submitter;
+	friend class NV12Submitter;
+	friend class AMFConverterSubmitter;
+	friend class OpenCLSubmitter;
+	friend class DX11Submitter;
+	friend class DX11ComputeSubmitter;
 private:
 	Logger *mLog;
 	int started;	//if the codec has been properly initalized yet
@@ -94,6 +129,7 @@ private:
 	UINT32 mIDRPeriod;
 	DWORD  mCompressedSize;
 	bool mCLConv;
+	Submitter *mSubmitter;
 
 	/* ICM_COMPRESS_FRAMES_INFO params */
 	int frame_total;
@@ -138,6 +174,106 @@ public:
 	DWORD DecompressEnd();
 
 	BOOL QueryConfigure();
+};
+
+class NV12Submitter : public Submitter
+{
+public:
+	CodecInst *mInstance;
+	NV12Submitter(CodecInst *instance) : mInstance(instance)
+	{}
+
+	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
+};
+
+class AMFConverterSubmitter : public Submitter
+{
+public:
+	CodecInst *mInstance;
+	AMFConverterSubmitter(CodecInst *instance) : mInstance(instance)
+	{}
+
+	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
+};
+
+class OpenCLSubmitter : public Submitter
+{
+public:
+	CodecInst *mInstance;
+	OpenCLSubmitter(CodecInst *instance) : mInstance(instance)
+	{}
+
+	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
+};
+
+class DX11Submitter : public Submitter
+{
+public:
+	CodecInst *mInstance;
+	amf::AMFSurfacePtr surface;
+	ID3D11Texture2D *mTexStaging;
+	DX11Submitter(CodecInst *instance) : mInstance(instance)
+	{
+	}
+	~DX11Submitter()
+	{
+		if (mTexStaging)
+		{
+			mTexStaging->Release();
+			mTexStaging = nullptr;
+		}
+	}
+
+	bool Init()
+	{
+		AMF_RESULT res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_DX11, amf::AMF_SURFACE_NV12,
+			mInstance->mWidth, mInstance->mHeight, &surface);
+		if (res != AMF_OK)
+			return false;
+		return true;
+	}
+
+	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
+};
+
+// Can only do 32bit RGB
+class DX11ComputeSubmitter : public Submitter
+{
+public:
+	CodecInst*			mInstance;
+	amf::AMFSurfacePtr	mSurface;
+	ID3D11Texture2D*	mTexStaging;
+
+	ID3D11Buffer*				mSrcBuffer;
+	ID3D11ShaderResourceView*	mSrcBufferView;
+	ID3D11DeviceContext*		mImmediateContext;
+	ID3D11UnorderedAccessView	*mUavNV12[2] = { nullptr, nullptr };
+	ID3D11ComputeShader*		mComputeShader;
+	ID3D11Buffer* mConstantBuf;
+
+	DX11ComputeSubmitter(CodecInst *instance) : mInstance(instance)
+		, mSrcBufferView(nullptr)
+		, mSrcBuffer(nullptr)
+		, mImmediateContext(nullptr)
+		, mConstantBuf(nullptr)
+	{
+	}
+
+	~DX11ComputeSubmitter()
+	{
+		if (!mSurface.GetPtr())
+			SafeRelease(&mTexStaging);
+		SafeRelease(&mUavNV12[0]);
+		SafeRelease(&mUavNV12[1]);
+		SafeRelease(&mSrcBuffer);
+		SafeRelease(&mSrcBufferView);
+		SafeRelease(&mComputeShader);
+		SafeRelease(&mImmediateContext);
+	}
+
+	bool Init();
+	bool loadComputeShader();
+	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
 };
 
 CodecInst* Open(ICOPEN* icinfo);

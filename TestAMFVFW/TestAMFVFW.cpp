@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma comment(lib, "WinMM")
 #pragma comment(lib, "delayimp")
+#pragma comment(lib, "d3dcompiler.lib")
 
 #if _WIN64
 #define LIBEXT L"64"
@@ -98,10 +99,12 @@ CodecInst::CodecInst()
 	, fps_num(30)
 	, fps_den(1)
 	, mCLConv(true)
+	, mSubmitter(nullptr)
 {
 	InitSettings();
 	ReadRegistry();
 	mLog = new Logger(!!mConfigTable[S_LOG]);
+	mCLConv = !mConfigTable[S_DISABLE_OCL];
 	if (mConfigTable[S_FPS_ENABLED])
 	{
 		fps_num = mConfigTable[S_FPS_NUM];
@@ -176,6 +179,10 @@ bool CodecInst::FindDLLs()
 		dllPath.append(L"\\");
 	}
 
+#if _DEBUG
+	dllPath.append(L"Dbg\\");
+#endif
+
 	corePath.append(dllPath);
 	corePath.append(L"amf-core-windesktop" LIBEXT L".dll");
 	vcePath.append(dllPath);
@@ -235,11 +242,19 @@ DWORD CodecInst::GetInfo(ICINFO* icinfo, DWORD dwSize) {
 
 #ifdef _M_X64
 	wcscpy_s(icinfo->szName, L"TestAMFVFW64");
-	wcscpy_s(icinfo->szDescription, L"TestAMFVFW64 Encoder");
+	wcscpy_s(icinfo->szDescription, L"TestAMFVFW64 Encoder"
+#if _DEBUG
+		L" (Debug)"
+#endif
+		);
 #else
 	wcscpy_s(icinfo->szName, L"TestAMFVFW");
 	//Well, no decoder part
-	wcscpy_s(icinfo->szDescription, L"TestAMFVFW Encoder");
+	wcscpy_s(icinfo->szDescription, L"TestAMFVFW Encoder"
+#if _DEBUG
+		L" (Debug)"
+#endif
+		);
 #endif
 
 	return sizeof(ICINFO);

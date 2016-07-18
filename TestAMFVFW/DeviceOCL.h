@@ -10,9 +10,9 @@ class DeviceOCL
 public:
 	DeviceOCL();
 	~DeviceOCL();
-	bool Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRIX matrix);
+	bool Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRIX matrix, bool useCPU = false);
 	bool InitBGRAKernels(int bpp);
-	bool ConvertBuffer(void *inBuf, size_t size);
+	bool ConvertBuffer(void *inBuf, size_t size, void* dest = nullptr, size_t destPitch = 0);
 	void Terminate();
 
 	cl_device_id GetDevice()
@@ -40,6 +40,6 @@ private:
 	cl_command_queue mCmdQueue;
 	cl_kernel mKernelY, mKernelUV;
 	cl_program mProgram;
-	cl_mem mInBuf, mOutImgY, mOutImgUV;
+	cl_mem mInBuf, mOutImgY, mOutImgUV, mBuffY, mBuffUV;
 	int mWidth, mHeight, mAlignedWidth, mAlignedHeight;
 };

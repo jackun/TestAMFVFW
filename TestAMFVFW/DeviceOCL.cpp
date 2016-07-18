@@ -20,6 +20,8 @@ DeviceOCL::DeviceOCL()
 	, mInBuf(nullptr)
 	, mOutImgY(nullptr)
 	, mOutImgUV(nullptr)
+	, mBuffY(nullptr)
+	, mBuffUV(nullptr)
 	, mWidth(0)
 	, mHeight(0)
 	, mAlignedWidth(0)
@@ -72,7 +74,7 @@ void DeviceOCL::Terminate()
 	mContext = nullptr;
 }
 
-bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRIX matrix)
+bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRIX matrix, bool useCPU)
 {
 	size_t strSize = 0;
 	cl_int status = 0;
@@ -96,30 +98,39 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 		delete[] exts;
 	}
 
-	clGetDeviceIDsFromD3D11KHR_fn p_clGetDeviceIDsFromD3D11KHR = 
-		static_cast<clGetDeviceIDsFromD3D11KHR_fn>
-		(clGetExtensionFunctionAddressForPlatform(platformID, "clGetDeviceIDsFromD3D11KHR"));
-	if (!p_clGetDeviceIDsFromD3D11KHR)
+	if (!useCPU)
 	{
-		Log(L"Cannot resolve ClGetDeviceIDsFromD3D11KHR function.\n");
-		return false;
+		clGetDeviceIDsFromD3D11KHR_fn p_clGetDeviceIDsFromD3D11KHR =
+			static_cast<clGetDeviceIDsFromD3D11KHR_fn>
+			(clGetExtensionFunctionAddressForPlatform(platformID, "clGetDeviceIDsFromD3D11KHR"));
+		if (!p_clGetDeviceIDsFromD3D11KHR)
+		{
+			Log(L"Cannot resolve ClGetDeviceIDsFromD3D11KHR function.\n");
+			return false;
+		}
+
+		status = p_clGetDeviceIDsFromD3D11KHR(platformID, CL_D3D11_DEVICE_KHR,
+			(void*)pD3DDevice, CL_PREFERRED_DEVICES_FOR_D3D11_KHR, 1, &mDevice, NULL);
+		RETURNIFERROR(status, L"clGetDeviceIDsFromD3D11KHR() failed.\n");
+
+		status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, 0, nullptr, &strSize);
+		if (!status)
+		{
+			char *exts = new char[strSize];
+			status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, strSize, exts, nullptr);
+			Log(L"CL Device Extensions: %S.\n", exts);
+			delete[] exts;
+		}
+
+		cps.push_back(CL_CONTEXT_D3D11_DEVICE_KHR);
+		cps.push_back((cl_context_properties)pD3DDevice);
+	}
+	else
+	{
+		status = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_CPU, 1, &mDevice, nullptr);
+		RETURNIFERROR(status, L"clGetDeviceIDs() failed.\n");
 	}
 
-	status = p_clGetDeviceIDsFromD3D11KHR(platformID, CL_D3D11_DEVICE_KHR,
-		(void*)pD3DDevice, CL_PREFERRED_DEVICES_FOR_D3D11_KHR, 1, &mDevice, NULL);
-	RETURNIFERROR(status, L"clGetDeviceIDsFromD3D11KHR() failed.\n");
-
-	status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, 0, nullptr, &strSize);
-	if (!status)
-	{
-		char *exts = new char[strSize];
-		status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, strSize, exts, nullptr);
-		Log(L"CL Device Extensions: %S.\n", exts);
-		delete[] exts;
-	}
-
-	cps.push_back(CL_CONTEXT_D3D11_DEVICE_KHR);
-	cps.push_back((cl_context_properties)pD3DDevice);
 	cps.push_back(CL_CONTEXT_PLATFORM);
 	cps.push_back((cl_context_properties)platformID);
 	cps.push_back(0);
@@ -218,7 +229,8 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 
 	mOutImgY = clCreateImage2D(mContext,
 		//TODO tweak these
-		CL_MEM_WRITE_ONLY, //CL_MEM_WRITE_ONLY | CL_MEM_USE_PERSISTENT_MEM_AMD,
+		//CL_MEM_WRITE_ONLY,
+		CL_MEM_WRITE_ONLY | CL_MEM_USE_PERSISTENT_MEM_AMD,
 		&imgf, mAlignedWidth, mAlignedHeight, 0, nullptr, &status);
 	RETURNIFERROR(status, L"Failed to create Y image.\n");
 
@@ -229,10 +241,16 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	int uv_height = (mAlignedHeight + 1) / 2;
 
 	mOutImgUV = clCreateImage2D(mContext,
-		CL_MEM_WRITE_ONLY /*| CL_MEM_USE_PERSISTENT_MEM_AMD*/,
+		CL_MEM_WRITE_ONLY | CL_MEM_USE_PERSISTENT_MEM_AMD,
 		&imgf, uv_width, uv_height,
 		0, nullptr, &status);
 	RETURNIFERROR(status, L"Failed to create UV image.\n");
+
+	/*mBuffY = clCreateBuffer(mContext, CL_MEM_READ_ONLY, mAlignedWidth * mAlignedHeight, nullptr, &status);
+	RETURNIFERROR(status, L"Failed to create Y buffer.\n");
+
+	mBuffUV = clCreateBuffer(mContext, CL_MEM_READ_ONLY, uv_width * uv_height * 2, nullptr, &status);
+	RETURNIFERROR(status, L"Failed to create Y buffer.\n");*/
 
 	return true;
 }
@@ -294,7 +312,7 @@ bool DeviceOCL::setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output)
 	return true;
 }
 
-bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size)
+bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destPitch)
 {
 	cl_int status = 0;
 	cl_event unmapEvent;
@@ -327,6 +345,8 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size)
 	status = clWaitForEvents(1, &unmapEvent);
 	if (status != CL_SUCCESS) Log(L"clWaitForEvents(unmapEvent) failed: %d.\n", status);
 	clReleaseEvent(unmapEvent);
+	//status = clEnqueueBarrier(mCmdQueue);
+	//if (status != CL_SUCCESS) Log(L"clEnqueueBarrier failed: %d.\n", status);
 	EndProfile
 
 	Profile(EnqNDR)
@@ -347,6 +367,61 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size)
 	clReleaseEvent(ndrEvents[0]);
 	clReleaseEvent(ndrEvents[1]);
 	//clFinish(mCmdQueue);
+
+	//slow and fuxxored
+	if (dest)
+	{
+		size_t origin[] = { 0, 0, 0 };
+		size_t region[] = { mAlignedWidth, mAlignedHeight, 1 };
+		size_t image_row_pitchY, image_row_pitchUV;
+
+		void *pY = clEnqueueMapImage(mCmdQueue, mOutImgY, CL_FALSE, CL_MAP_READ,
+			origin, region,
+			&image_row_pitchY, nullptr,
+			0, nullptr,
+			&ndrEvents[0], &status);
+		RETURNIFERROR(status, L"Failed to map Y image.\n");
+
+		region[0] /= 2;
+		region[1] = (mAlignedHeight + 1) / 2;
+
+		void *pUV = clEnqueueMapImage(mCmdQueue, mOutImgUV, CL_FALSE, CL_MAP_READ,
+			origin, region,
+			&image_row_pitchUV, nullptr,
+			0, nullptr,
+			&ndrEvents[1], &status);
+		RETURNIFERROR(status, L"Failed to map UV image.\n");
+
+		status = clWaitForEvents(2, ndrEvents);
+		if (status != CL_SUCCESS) Log(L"clWaitForEvents for map events failed: %d.\n", status);
+		clReleaseEvent(ndrEvents[0]);
+		clReleaseEvent(ndrEvents[1]);
+
+		/*if (destPitch == image_row_pitchY)
+		{
+			memcpy(dest, pY, destPitch * mHeight);
+			memcpy((uint8_t*)dest + destPitch * mHeight, pUV, image_row_pitchUV * mHeight / 2);
+		}
+		else*/
+		{
+			uint8_t *pSrcY = (uint8_t *)pY;
+			uint8_t *pSrcUV = (uint8_t *)pUV;
+			uint8_t* pDst = (uint8_t*)dest;
+
+			for (int y = 0; y < mHeight; y++, pSrcY += image_row_pitchY, pDst += destPitch)
+				memcpy(pDst, pSrcY, mWidth);
+
+			pDst = (uint8_t*)dest + destPitch * mHeight;
+			for (int y = 0; y < mHeight / 2; y++, pSrcUV += image_row_pitchUV, pDst += destPitch)
+				memcpy(pDst, pSrcUV, mWidth);
+		}
+
+		status = clEnqueueUnmapMemObject(mCmdQueue, mOutImgY, pY, 0, nullptr, nullptr);
+		if (status != CL_SUCCESS) Log(L"clEnqueueUnmapMemObject(pY) failed: %d.\n", status);
+		status = clEnqueueUnmapMemObject(mCmdQueue, mOutImgUV, pUV, 0, nullptr, nullptr);
+		if (status != CL_SUCCESS) Log(L"clEnqueueUnmapMemObject(pUV) failed: %d.\n", status);
+	}
+
 	EndProfile
 
 	return true;

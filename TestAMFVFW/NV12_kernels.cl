@@ -258,5 +258,5 @@ __kernel void BGRtoNV12_UV(__global uchar *input,
 #endif
 }
 
-//AMD openCL frontend may add gibberish at the end, so add a comment here to ... comment it. Mind the editors that append new line (\n and/or \r).
+// Might read too much from resource pointer, comment it out :P
 //

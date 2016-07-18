@@ -137,6 +137,9 @@ bool DeviceDX11::Create(UINT32 adapter, bool onlyWithOutputs)
 	//}
 
 	UINT createDeviceFlags = 0;
+#ifdef _DEBUG
+	createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
 
 	D3D_FEATURE_LEVEL featureLevels[] =
 	{
