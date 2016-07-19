@@ -126,10 +126,12 @@ __kernel void BGRAtoNV12_YUV(const __global uchar4 *input,
 		}
 	}
 
+	pixel = &px[0];
 	for (int j = 0; j < 2; j++)
 	for (int i = 0; i < 2; i++)
 	{
-		uint Y = convert_uint_sat_rte(dot(YcoeffB, px[j * 2 + i]));
+		uint Y = convert_uint_sat_rte(dot(YcoeffB, *pixel));
+		pixel++;
 
 		#ifdef FLIP
 			write_imageui(outputY, (int2)(id.x * 2 + i, height - (id.y * 2 + j) - 1), (uint4)(Y, 0, 0, 255));
@@ -152,6 +154,61 @@ __kernel void BGRAtoNV12_YUV(const __global uchar4 *input,
 #endif
 
 }
+
+__kernel void BGRtoNV12_YUV(const __global uchar *input,
+						__write_only image2d_t outputY,
+						__write_only image2d_t outputUV)
+{
+	int2 id = (int2)(get_global_id(0), get_global_id(1));
+
+	int width = get_global_size(0) * 2;
+	int height = get_global_size(1) * 2;
+	int heightHalf = get_global_size(1);
+
+	float4 px[4];
+	float4 *pixel = &px[0];
+	//Some speed-up from prefetch
+	for (int j = 0; j < 2; j++)
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			*pixel = (float4)(convert_float3(vload3(id.x * 2 + i + width * id.y *2 + width * j, input)), 255.0f);
+
+			#ifdef RGB_LIMITED
+				*pixel.xyz = 16.f + *pixel.xyz * 219.f / 255.f;
+			#endif
+			pixel++;
+		}
+	}
+
+	pixel = &px[0];
+	for (int j = 0; j < 2; j++)
+	for (int i = 0; i < 2; i++)
+	{
+		uint Y = convert_uint_sat_rte(dot(YcoeffB, *pixel));
+		pixel++;
+		#ifdef FLIP
+			write_imageui(outputY, (int2)(id.x * 2 + i, height - (id.y * 2 + j) - 1), (uint4)(Y, 0, 0, 255));
+		#else
+			write_imageui(outputY, (int2)(id.x * 2 + i, id.y * 2 + j), (uint4)(Y, 0, 0, 255));
+		#endif
+	}
+
+	float2 UV00 = (float2)(dot(px[0], UcoeffB), dot(px[0], VcoeffB));
+	float2 UV01 = (float2)(dot(px[1], UcoeffB), dot(px[1], VcoeffB));
+	float2 UV10 = (float2)(dot(px[2], UcoeffB), dot(px[2], VcoeffB));
+	float2 UV11 = (float2)(dot(px[3], UcoeffB), dot(px[3], VcoeffB));
+
+	uint2 UV = convert_uint2_sat_rte((UV00 + UV01 + UV10 + UV11) / 4);
+
+#ifdef FLIP
+	write_imageui(outputUV, (int2)(id.x, heightHalf - id.y - 1), (uint4)(UV.x, UV.y, 0, 255));
+#else
+	write_imageui(outputUV, id, (uint4)(UV.x, UV.y, 0, 255));
+#endif
+
+}
+// ------------------------------
 
 __kernel void BGRAtoNV12_Y(const __global uchar4 *input,
 						__write_only image2d_t output,
@@ -231,61 +288,6 @@ __kernel void BGRAtoNV12_UV(const __global uchar4 *input,
 }
 
 // ------------------------------
-__kernel void BGRtoNV12_YUV(const __global uchar *input,
-						__write_only image2d_t outputY,
-						__write_only image2d_t outputUV)
-{
-	int2 id = (int2)(get_global_id(0), get_global_id(1));
-
-	int width = get_global_size(0) * 2;
-	int height = get_global_size(1) * 2;
-	uint heightHalf = get_global_size(1);
-
-	float4 px[4];
-
-	for (int j = 0; j < 2; j++)
-	for (int i = 0; i < 2; i++)
-	{
-		float4 pixel = (float4)(convert_float3(vload3(id.x * 2 + i + width * id.y *2 + width * j, input)), 255.0f);
-		px[j * 2 + i] = pixel;
-
-		#ifdef RGB_LIMITED
-			pixel.xyz = 16.f + pixel.xyz * 219.f / 255.f;
-		#endif
-
-			uint Y = convert_uint_sat_rte(dot(YcoeffB, pixel));
-
-		#ifdef FLIP
-			write_imageui(outputY, (int2)(id.x * 2 + i, height - (id.y * 2 + j) - 1), (uint4)(Y, 0, 0, 255));
-		#else
-			write_imageui(outputY, (int2)(id.x * 2 + i, id.y * 2 + j), (uint4)(Y, 0, 0, 255));
-		#endif
-	}
-
-#ifdef RGB_LIMITED
-	px[0].xyz = 16.f + px[0].xyz * 219.f / 255.f;
-	px[1].xyz = 16.f + px[1].xyz * 219.f / 255.f;
-	px[2].xyz = 16.f + px[2].xyz * 219.f / 255.f;
-	px[3].xyz = 16.f + px[3].xyz * 219.f / 255.f;
-#endif
-
-	//Seems like no difference between dot() and plain mul/add on GPU atleast
-	float2 UV00 = (float2)(dot(px[0], UcoeffB), dot(px[0], VcoeffB));
-	float2 UV01 = (float2)(dot(px[1], UcoeffB), dot(px[1], VcoeffB));
-	float2 UV10 = (float2)(dot(px[2], UcoeffB), dot(px[2], VcoeffB));
-	float2 UV11 = (float2)(dot(px[3], UcoeffB), dot(px[3], VcoeffB));
-
-	uint2 UV = convert_uint2_sat_rte((UV00 + UV01 + UV10 + UV11) / 4);
-
-	//output[uv_offset]     = UV.x;
-	//output[uv_offset + 1] = UV.y;
-#ifdef FLIP
-	write_imageui(outputUV, (int2)(id.x, heightHalf - id.y - 1), (uint4)(UV.x, UV.y, 0, 255));
-#else
-	write_imageui(outputUV, id, (uint4)(UV.x, UV.y, 0, 255));
-#endif
-
-}
 
 __kernel void BGRtoNV12_Y(__global uchar *input,
 						__write_only image2d_t output,
