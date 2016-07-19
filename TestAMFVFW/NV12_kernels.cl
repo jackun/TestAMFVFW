@@ -111,19 +111,25 @@ __kernel void BGRAtoNV12_YUV(const __global uchar4 *input,
 	int heightHalf = get_global_size(1);
 
 	float4 px[4];
+	float4 *pixel = &px[0];
+	//Some speed-up from prefetch
+	for (int j = 0; j < 2; j++)
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			*pixel = (float4)(convert_float3(input[id.x * 2 + i + width * id.y * 2 + width * j].xyz), 255.f);
+
+			#ifdef RGB_LIMITED
+				*pixel.xyz = 16.f + *pixel.xyz * 219.f / 255.f;
+			#endif
+			pixel++;
+		}
+	}
 
 	for (int j = 0; j < 2; j++)
 	for (int i = 0; i < 2; i++)
 	{
-		//read first, fence then convert?
-		float4 pixel = (float4)(convert_float3(input[id.x * 2 + i + width * id.y * 2 + width * j].xyz), 255.f);
-		px[j * 2 + i] = pixel;
-
-		#ifdef RGB_LIMITED
-			pixel.xyz = 16.f + pixel.xyz * 219.f / 255.f;
-		#endif
-
-		uint Y = convert_uint_sat_rte(dot(YcoeffB, pixel));
+		uint Y = convert_uint_sat_rte(dot(YcoeffB, px[j * 2 + i]));
 
 		#ifdef FLIP
 			write_imageui(outputY, (int2)(id.x * 2 + i, height - (id.y * 2 + j) - 1), (uint4)(Y, 0, 0, 255));
@@ -131,13 +137,6 @@ __kernel void BGRAtoNV12_YUV(const __global uchar4 *input,
 			write_imageui(outputY, (int2)(id.x * 2 + i, id.y * 2 + j), (uint4)(Y, 0, 0, 255));
 		#endif
 	}
-
-#ifdef RGB_LIMITED
-	px[0].xyz = 16.f + px[0].xyz * 219.f / 255.f;
-	px[1].xyz = 16.f + px[1].xyz * 219.f / 255.f;
-	px[2].xyz = 16.f + px[2].xyz * 219.f / 255.f;
-	px[3].xyz = 16.f + px[3].xyz * 219.f / 255.f;
-#endif
 
 	float2 UV00 = (float2)(dot(px[0], UcoeffB), dot(px[0], VcoeffB));
 	float2 UV01 = (float2)(dot(px[1], UcoeffB), dot(px[1], VcoeffB));
