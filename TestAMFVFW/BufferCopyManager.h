@@ -61,6 +61,7 @@ struct BufferCopyManager
 		}
 		threads.resize(0);
 		state.resize(0);
+		evtHandles.resize(0);
 	}
 
 	DWORD Wait()
