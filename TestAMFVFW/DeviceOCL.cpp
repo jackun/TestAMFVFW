@@ -143,7 +143,13 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	mContext = clCreateContext(&cps[0], 1, &mDevice, NULL, NULL, &status);
 	RETURNIFERROR(status, L"clCreateContext() failed.\n");
 
-	mCmdQueue = clCreateCommandQueue(mContext, mDevice, (cl_command_queue_properties)NULL, &status);
+	mCmdQueue = clCreateCommandQueue(mContext, mDevice, (cl_command_queue_properties)
+#ifdef _DEBUG
+		CL_QUEUE_PROFILING_ENABLE
+#else
+		0
+#endif
+		, &status);
 	RETURNIFERROR(status, L"clCreateCommandQueue() failed.\n");
 
 	// ---------------------------
@@ -379,6 +385,13 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 
 	status = clWaitForEvents(1, ndrEvents);
 	if (status != CL_SUCCESS) Log(L"clWaitForEvents(ndrEvents) failed: %d.\n", status);
+
+#ifdef _DEBUG
+	double timing = 0;
+	if (ProfileEvent(ndrEvents[0], timing) == CL_SUCCESS)
+		Dbg(L"Kernel runtime: %fms\n", timing);
+#endif
+
 	clReleaseEvent(ndrEvents[0]);
 	//clReleaseEvent(ndrEvents[1]);
 	//clFinish(mCmdQueue);
@@ -472,4 +485,32 @@ bool DeviceOCL::FindPlatformID(cl_platform_id &platform)
 		}
 	}
 	return false;
+}
+
+int DeviceOCL::ProfileEvent(cl_event evt, double& prof)
+{
+	// Calculate performance
+	cl_ulong startTime;
+	cl_ulong endTime;
+	cl_int status;
+
+	// Get kernel profiling info
+	status = clGetEventProfilingInfo(evt,
+		CL_PROFILING_COMMAND_START,
+		sizeof(cl_ulong),
+		&startTime,
+		0);
+	RETURNIFERROR(status, L"clGetEventProfilingInfo failed.(startTime)\n");
+
+	status = clGetEventProfilingInfo(evt,
+		CL_PROFILING_COMMAND_END,
+		sizeof(cl_ulong),
+		&endTime,
+		0);
+	RETURNIFERROR(status, L"clGetEventProfilingInfo failed.(endTime)\n");
+
+	// Cumulate time for each iteration
+	//prof += 1e-9 * (endTime - startTime);
+	prof = 1e-6 * (endTime - startTime);
+	return CL_SUCCESS;
 }

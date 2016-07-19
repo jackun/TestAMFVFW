@@ -35,6 +35,7 @@ public:
 private:
 	bool FindPlatformID(cl_platform_id &platform);
 	bool setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem outputY, cl_mem outputUV);
+	int ProfileEvent(cl_event evt, double& prof);
 
 	cl_device_id mDevice;
 	cl_context mContext;
