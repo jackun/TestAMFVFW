@@ -17,8 +17,6 @@ cbuffer globals : register(b0)
 float4 readPixel(int x, int y)
 {
 	float4 output;
-	uint w, h;
-	Buffer0.GetDimensions(w, h);
 	uint index = (x + y * inPitch);
 	
 	output.x = float(Buffer0[index] & 0x000000ff);
@@ -41,8 +39,14 @@ void CSMain( uint3 dispatchThreadID : SV_DispatchThreadID )
 	{
 		float4 pixel = readPixel(dispatchThreadID.x * 2 + i, dispatchThreadID.y * 2 + j);
 		px[j * 2 + i] = pixel;
-		BufferY[uint2(dispatchThreadID.x * 2 + i, h - (dispatchThreadID.y * 2 + j) - 1)] = uint(dot(pixel, YcoeffB));
+		//BufferY[uint2(dispatchThreadID.x * 2 + i, h - (dispatchThreadID.y * 2 + j) - 1)] = uint(dot(pixel, YcoeffB));
 	}
+
+	for (int j = 0; j < 2; j++)
+		for (int i = 0; i < 2; i++)
+		{
+			BufferY[uint2(dispatchThreadID.x * 2 + i, h - (dispatchThreadID.y * 2 + j) - 1)] = uint(dot(px[j * 2 + i], YcoeffB));
+		}
 
 	float2 UV00 = float2(dot(px[0], UcoeffB), dot(px[0], VcoeffB));
 	float2 UV10 = float2(dot(px[1], UcoeffB), dot(px[1], VcoeffB));
