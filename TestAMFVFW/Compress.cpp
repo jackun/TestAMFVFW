@@ -582,7 +582,7 @@ DWORD AMFConverterSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int
 			// Flip it
 			for (int h = mInstance->mHeight - 1; h >= 0; h--, ptr += pitch)
 			{
-				CopyMemory(ptr, (uint8_t*)data + h * inPitch, inPitch);
+				memcpy(ptr, (uint8_t*)data + h * inPitch, inPitch);
 			}
 		}
 		break;
@@ -786,8 +786,6 @@ bool DX11ComputeSubmitter::Init()
 	descBuf.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	//descBuf.Usage = D3D11_USAGE_DYNAMIC;
 
-	//D3D11_SUBRESOURCE_DATA InitData;
-	//InitData.pSysMem = m_srcTextureData;
 	HRESULT hr;
 	if (FAILED((hr = pDev->CreateBuffer(&descBuf, nullptr, &mSrcBuffer))))
 	{
