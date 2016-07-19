@@ -779,12 +779,12 @@ bool DX11ComputeSubmitter::Init()
 
 	D3D11_BUFFER_DESC descBuf;
 	ZeroMemory(&descBuf, sizeof(descBuf));
-	descBuf.BindFlags = D3D11_BIND_UNORDERED_ACCESS | D3D11_BIND_SHADER_RESOURCE;
+	descBuf.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 	descBuf.ByteWidth = w * h * 4;
 	descBuf.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 	descBuf.StructureByteStride = 4;	// Assume RGBA format
 	descBuf.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	//descBuf.Usage = D3D11_USAGE_DYNAMIC;
+	descBuf.Usage = D3D11_USAGE_DYNAMIC;
 
 	HRESULT hr;
 	if (FAILED((hr = pDev->CreateBuffer(&descBuf, nullptr, &mSrcBuffer))))
@@ -930,7 +930,7 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 
 	Profile(Upload)
 	D3D11_MAPPED_SUBRESOURCE map;
-	if (FAILED(mImmediateContext->Map(mSrcBuffer, 0, D3D11_MAP_WRITE /*_DISCARD*/, 0, &map)))
+	if (FAILED(mImmediateContext->Map(mSrcBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map)))
 		return ICERR_INTERNAL;
 
 	//memcpy(map.pData, data, inhdr->biSizeImage);
