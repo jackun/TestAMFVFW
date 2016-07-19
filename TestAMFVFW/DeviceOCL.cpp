@@ -37,6 +37,8 @@ DeviceOCL::~DeviceOCL()
 
 void DeviceOCL::Terminate()
 {
+	mBufferCopyManager.Stop();
+
 	if (mInBuf)
 		clReleaseMemObject(mInBuf);
 	mInBuf = nullptr;
@@ -286,7 +288,7 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 	mInBuf = clCreateBuffer(
 		mContext,
 		CL_MEM_READ_ONLY | CL_MEM_USE_PERSISTENT_MEM_AMD,
-		//CL_MEM_READ_ONLY|CL_MEM_ALLOC_HOST_PTR, //~6GB/s map/memcpy
+		//CL_MEM_READ_ONLY|CL_MEM_ALLOC_HOST_PTR, //~6GB/s map/memcpy, slow NDR
 		inSizeAligned,
 		NULL,
 		&status);

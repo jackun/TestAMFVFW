@@ -24,20 +24,7 @@ struct BufferCopyManager
 
 	~BufferCopyManager()
 	{
-		for (int i = 0; i < threads.size(); i++)
-		{
-			state[i].pSrc = nullptr;
-			if (state[i].sigCopy != INVALID_HANDLE_VALUE)
-				SetEvent(state[i].sigCopy);
-		}
-		WaitForMultipleObjects(threads.size(), threads.data(), TRUE, 3001); //Join threads
-
-		for (int i = 0; i < state.size(); i++)
-		{
-			CloseHandle(state[i].sigCopy);
-			CloseHandle(state[i].sigDone);
-			CloseHandle(threads[i]);
-		}
+		Stop();
 	}
 
 	void Start(int thrcount)
@@ -45,15 +32,35 @@ struct BufferCopyManager
 		threads.resize(thrcount);
 		state.resize(threads.size(), BufferCopyState{ INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, 0,0,0 });
 		evtHandles.reserve(threads.size());
-		for (int i = 0; i < threads.size(); i++)
+		for (size_t i = 0; i < threads.size(); i++)
 		{
 			state[i].sigCopy = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 			state[i].sigDone = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 			evtHandles.push_back(state[i].sigDone);
 		}
 
-		for (int i = 0; i < threads.size(); i++)
+		for (size_t i = 0; i < threads.size(); i++)
 			threads[i] = CreateThread(nullptr, 0, BufferCopyThread, &state[i], 0, nullptr);
+	}
+
+	void Stop()
+	{
+		for (size_t i = 0; i < threads.size(); i++)
+		{
+			state[i].pSrc = nullptr;
+			if (state[i].sigCopy != INVALID_HANDLE_VALUE)
+				SetEvent(state[i].sigCopy);
+		}
+		WaitForMultipleObjects(threads.size(), threads.data(), TRUE, 3001); //Join threads
+
+		for (size_t i = 0; i < state.size(); i++)
+		{
+			CloseHandle(state[i].sigCopy);
+			CloseHandle(state[i].sigDone);
+			CloseHandle(threads[i]);
+		}
+		threads.resize(0);
+		state.resize(0);
 	}
 
 	DWORD Wait()
@@ -64,7 +71,7 @@ struct BufferCopyManager
 	void SetData(void *src, void *dst, size_t size)
 	{
 		size_t threadcount = threads.size();
-		for (int i = 0; i < threadcount; i++)
+		for (size_t i = 0; i < threadcount; i++)
 		{
 			if (i < threadcount - 1)
 				state[i].size = size / threadcount;
