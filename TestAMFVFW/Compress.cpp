@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "TestAMFVFW.h"
 #include "DeviceOCL.h"
+#include <VersionHelpers.h>
 
 using hrc = std::chrono::high_resolution_clock;
 void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int inpitch);
@@ -173,6 +174,7 @@ DWORD CodecInst::CompressGetFormat(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER
 DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpbiOut){
 	AMF_RESULT res = AMF_OK;
 	amf::H264EncoderCapsPtr encCaps;
+	bool usingAMFConv = false;
 
 	if (started == 0x1337){
 		LogMsg(false, L"CompressBegin: already began compressing, exiting...");
@@ -237,15 +239,22 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	{
 	case amf::AMF_SURFACE_BGRA:
 	{
-		if (mCLConv || lpbiIn->biBitCount == 24)
+		if (mCLConv /*|| lpbiIn->biBitCount == 24*/ && mConfigTable[S_CONVTYPE] == 2)
 			mSubmitter = new OpenCLSubmitter(this);
 		else
 		{
-			if (lpbiIn->biBitCount == 32)
+			if (mConfigTable[S_CONVTYPE] == 3)
+				mSubmitter = new DX11Submitter(this); // slow CPU conversion
+			else if (lpbiIn->biBitCount == 32)
 			{
-				mSubmitter = new DX11ComputeSubmitter(this);
-				//mSubmitter = new DX11Submitter(this);
-				//mSubmitter = new AMFConverterSubmitter(this);
+				if (mConfigTable[S_CONVTYPE] == 0 && IsWindows8OrGreater())
+					mSubmitter = new DX11ComputeSubmitter(this);
+				else
+				{
+					//mSubmitter = new DX11Submitter(this);
+					mSubmitter = new AMFConverterSubmitter(this);
+					usingAMFConv = true;
+				}
 			}
 			else
 				mSubmitter = new DX11Submitter(this); // slow CPU conversion
@@ -257,6 +266,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		break;
 	default:
 		mSubmitter = new AMFConverterSubmitter(this);
+		usingAMFConv = true;
 		break;
 	}
 
@@ -264,27 +274,33 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	if (res != AMF_OK)
 		goto fail;
 
-	res = mContext->InitDX11(mDeviceDX11.GetDevice(), amf::AMF_DX11_1);
+	res = mContext->InitDX11(mDeviceDX11.GetDevice(), amf::AMF_DX11_0);
 	if (res != AMF_OK)
 		goto fail;
 
 	// Some speed up
-	res = mContext->InitOpenCL(mDeviceCL.GetCmdQueue());
-	if (res != AMF_OK)
-		goto fail;
+	if (mCLConv)
+	{
+		res = mContext->InitOpenCL(mDeviceCL.GetCmdQueue());
+		if (res != AMF_OK)
+			goto fail;
+	}
 
-	res = AMFCreateComponent(mContext, AMFVideoConverter, &mConverter);
-	if (res != AMF_OK)
-		goto fail;
+	if (usingAMFConv)
+	{
+		res = AMFCreateComponent(mContext, AMFVideoConverter, &mConverter);
+		if (res != AMF_OK)
+			goto fail;
 
-	AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_MEMORY_TYPE, amf::AMF_MEMORY_OPENCL);
-	AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_OUTPUT_FORMAT, amf::AMF_SURFACE_NV12);
-	AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_COLOR_PROFILE, mConfigTable[S_COLORPROF]); //AMF_VIDEO_CONVERTER_COLOR_PROFILE_709
-	AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_OUTPUT_SIZE, ::AMFConstructSize(mWidth, mHeight));
+		AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_MEMORY_TYPE, amf::AMF_MEMORY_OPENCL);
+		AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_OUTPUT_FORMAT, amf::AMF_SURFACE_NV12);
+		AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_COLOR_PROFILE, mConfigTable[S_COLORPROF]); //AMF_VIDEO_CONVERTER_COLOR_PROFILE_709
+		AMFLOGSET(mConverter, AMF_VIDEO_CONVERTER_OUTPUT_SIZE, ::AMFConstructSize(mWidth, mHeight));
 
-	res = mConverter->Init(mFmtIn , mWidth, mHeight);
-	if (res != AMF_OK)
-		goto fail;
+		res = mConverter->Init(mFmtIn, mWidth, mHeight);
+		if (res != AMF_OK)
+			goto fail;
+	}
 
 	res = AMFCreateComponent(mContext, AMFVideoEncoderVCE_AVC, &mEncoder);
 	if (res != AMF_OK)
@@ -568,7 +584,58 @@ DWORD AMFConverterSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int
 
 	switch (mInstance->mFmtIn)
 	{
-		case amf::AMF_SURFACE_BGRA:
+	case amf::AMF_SURFACE_BGRA:
+	{
+		// Copy and flip RGB32 to AMF surface
+		res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_DX11, amf::AMF_SURFACE_BGRA, mInstance->mWidth, mInstance->mHeight, &surface);
+		if (res != AMF_OK)
+			return ICERR_INTERNAL;
+
+		ID3D11Texture2D *pTexDst = (ID3D11Texture2D *)surface->GetPlaneAt(0)->GetNative(); //no ref incr
+		ID3D11Device *pDevice = nullptr;
+		ID3D11DeviceContext* pCtx = nullptr;
+
+		pTexDst->GetDevice(&pDevice);
+		pDevice->GetImmediateContext(&pCtx);
+
+		if (!mTexStaging)
+		{
+			D3D11_TEXTURE2D_DESC desc = { 0 };
+			pTexDst->GetDesc(&desc);
+			desc.Usage = D3D11_USAGE_DYNAMIC;
+			desc.MiscFlags = 0;
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+			//desc.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+			//desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+			if (FAILED(pDevice->CreateTexture2D(&desc, NULL, &mTexStaging)))
+			{
+				pCtx->Release();
+				pDevice->Release();
+				return ICERR_INTERNAL;
+			}
+		}
+
+		int inPitch = inhdr->biBitCount / 8 * mInstance->mWidth;
+		D3D11_MAPPED_SUBRESOURCE lockedRect;
+
+		if (SUCCEEDED(pCtx->Map(mTexStaging, 0, D3D11_MAP_WRITE_DISCARD, 0, &lockedRect)))
+		{
+			uint8_t *ptr = (uint8_t *)lockedRect.pData;
+			// Flip it
+			for (int h = mInstance->mHeight - 1; h >= 0; h--, ptr += lockedRect.RowPitch)
+			{
+				memcpy(ptr, (uint8_t*)data + h * inPitch, inPitch);
+			}
+			pCtx->Unmap(mTexStaging, 0);
+			pCtx->CopySubresourceRegion(pTexDst, 0, 0, 0, 0, mTexStaging, 0, NULL);
+		}
+
+		pCtx->Release();
+		pDevice->Release();
+	}
+	break;
+		case amf::AMF_SURFACE_LAST:
 		{
 			// Copy and flip RGB32 to AMF surface
 			res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_HOST, mInstance->mFmtIn, mInstance->mWidth, mInstance->mHeight, &surface);
@@ -638,14 +705,15 @@ DWORD OpenCLSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts
 	amf::AMFSurfacePtr surface;
 	AMF_RESULT res;
 
-	Profile(AllocSurface)
-
 	// Convert RGB24|32 to NV12 with OpenCL
 	if (!mInstance->mDeviceCL.ConvertBuffer(data, inhdr->biSizeImage))
 		return ICERR_INTERNAL;
 
+	Profile(AllocSurface)
+
 	void* imgs[2];
 	mInstance->mDeviceCL.GetYUVImages(imgs);
+
 	res = mInstance->mContext->CreateSurfaceFromOpenCLNative(amf::AMF_SURFACE_NV12,
 		mInstance->mWidth, mInstance->mHeight, imgs, &surface, nullptr);
 	if (res != AMF_OK)
@@ -663,6 +731,15 @@ DWORD OpenCLSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts
 
 	EndProfile
 	return ICERR_OK;
+}
+
+bool DX11Submitter::Init()
+{
+	AMF_RESULT res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_DX11, amf::AMF_SURFACE_NV12,
+		mInstance->mWidth, mInstance->mHeight, &surface);
+	if (res != AMF_OK)
+		return false;
+	return true;
 }
 
 DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
@@ -757,8 +834,8 @@ DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 struct InputBuffer
 {
 	int inPitch;
+	int colorspace;
 	//IDK, 16byte align
-	int pad0;
 	int pad1;
 	int pad2;
 };
@@ -780,7 +857,8 @@ bool DX11ComputeSubmitter::Init()
 	D3D11_BUFFER_DESC descBuf;
 	ZeroMemory(&descBuf, sizeof(descBuf));
 	descBuf.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	descBuf.ByteWidth = w * h * 4;
+	//Align to shader thread count just in case
+	descBuf.ByteWidth = ((w + 31) & ~31) * ((h + 15) & ~15) * 4;
 	descBuf.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
 	descBuf.StructureByteStride = 4;	// Assume RGBA format
 	descBuf.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -795,6 +873,7 @@ bool DX11ComputeSubmitter::Init()
 
 	InputBuffer in;
 	in.inPitch = w;
+	in.colorspace = mInstance->mConfigTable[S_COLORPROF];
 
 	D3D11_SUBRESOURCE_DATA InitData;
 	InitData.pSysMem = &in;
@@ -934,7 +1013,7 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 		return ICERR_INTERNAL;
 
 	//memcpy(map.pData, data, inhdr->biSizeImage);
-
+	// YMMV if any speed-up
 	mBufferCopyManager.SetData(data, map.pData, inhdr->biSizeImage);
 	DWORD ret = mBufferCopyManager.Wait();
 
@@ -945,25 +1024,23 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 	EndProfile
 
 	Profile(Compute)
-	// Save state
-	ID3D11Buffer *tmpBuf = nullptr;
-	ID3D11ComputeShader *tmpShader = nullptr;
-	std::vector<ID3D11ClassInstance*> tmpClass;
-	UINT numClass = 0;
-	mImmediateContext->CSGetShader(&tmpShader, nullptr, &numClass);
-	if (numClass > 0)
-	{
-		tmpClass.resize(numClass);
-		mImmediateContext->CSGetShader(&tmpShader, tmpClass.data(), &numClass);
-		if (tmpShader) //ref incremented already, release first query
-			tmpShader->Release();
-	}
-	mImmediateContext->CSGetConstantBuffers(0, 1, &tmpBuf);
+	// Save state; nothing to save though so skip it for now
+	//ID3D11Buffer *tmpBuf = nullptr;
+	//ID3D11ComputeShader *tmpShader = nullptr;
+	//std::vector<ID3D11ClassInstance*> tmpClass;
+	//UINT numClass = 0;
+	//mImmediateContext->CSGetShader(&tmpShader, nullptr, &numClass);
+	//if (numClass > 0)
+	//{
+	//	tmpClass.resize(numClass);
+	//	mImmediateContext->CSGetShader(&tmpShader, tmpClass.data(), &numClass);
+	//	if (tmpShader) //ref incremented already, release first query
+	//		tmpShader->Release();
+	//}
+	//mImmediateContext->CSGetConstantBuffers(0, 1, &tmpBuf);
+	//mImmediateContext->CSGetUnorderedAccessViews(0, 2, ppUAViewPrev);
+	//mImmediateContext->CSGetShaderResources(0, 1, &ppSRVPrev);
 
-	mImmediateContext->CSGetUnorderedAccessViews(0, 2, ppUAViewPrev);
-	mImmediateContext->CSGetShaderResources(0, 1, &ppSRVPrev);
-
-	// We now set up the shader and run it
 	mImmediateContext->CSSetShader(mComputeShader, NULL, 0);
 	mImmediateContext->CSSetShaderResources(0, 1, &mSrcBufferView);
 	mImmediateContext->CSSetUnorderedAccessViews(0, 2, mUavNV12, NULL);
@@ -976,7 +1053,7 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 	mImmediateContext->Dispatch(dx, dy, 1);
 
 	// Restore state
-	mImmediateContext->CSSetShader(tmpShader, tmpClass.data(), tmpClass.size());
+	/*mImmediateContext->CSSetShader(tmpShader, tmpClass.data(), tmpClass.size());
 	mImmediateContext->CSSetShaderResources(0, 1, &ppSRVPrev);
 	mImmediateContext->CSSetUnorderedAccessViews(0, 2, ppUAViewPrev, NULL);
 	mImmediateContext->CSSetConstantBuffers(0, 1, &tmpBuf);
@@ -990,18 +1067,10 @@ DWORD DX11ComputeSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int6
 
 	SafeRelease(&ppSRVPrev);
 	SafeRelease(&ppUAViewPrev[0]);
-	SafeRelease(&ppUAViewPrev[1]);
+	SafeRelease(&ppUAViewPrev[1]);*/
 
 	EndProfile
 
-/*	Profile(CreateSurface)
-	res = mInstance->mContext->CreateSurfaceFromDX11Native(mTexStaging, &surface, nullptr);
-	if (res != AMF_OK)
-		return ICERR_INTERNAL;
-
-	surface->SetPts(pts);
-	EndProfile
-	*/
 	Profile(Submit)
 	res = mInstance->mEncoder->SubmitInput(mSurface);
 	// AMF_INPUT_FULL should be impossible so error out if it happens anyway

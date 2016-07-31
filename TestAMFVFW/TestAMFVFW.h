@@ -61,6 +61,7 @@ extern CRITICAL_SECTION lockCS;
 #define S_FPS_DEN     "FPSden"
 #define S_FPS_ENABLED "FPSEnabled"
 #define S_DISABLE_OCL "DisableOpenCL"
+#define S_CONVTYPE    "ConverterType"
 
 #define S_INSTALL     "InstallPath"
 
@@ -191,8 +192,14 @@ class AMFConverterSubmitter : public Submitter
 {
 public:
 	CodecInst *mInstance;
+	ID3D11Texture2D *mTexStaging;
 	AMFConverterSubmitter(CodecInst *instance) : mInstance(instance)
+		, mTexStaging(nullptr)
 	{}
+	~AMFConverterSubmitter()
+	{
+		SafeRelease(&mTexStaging);
+	}
 
 	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
 };
@@ -225,15 +232,7 @@ public:
 		}
 	}
 
-	bool Init()
-	{
-		AMF_RESULT res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_DX11, amf::AMF_SURFACE_NV12,
-			mInstance->mWidth, mInstance->mHeight, &surface);
-		if (res != AMF_OK)
-			return false;
-		return true;
-	}
-
+	bool Init();
 	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
 };
 

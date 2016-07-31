@@ -222,6 +222,7 @@ void CodecInst::InitSettings()
 	mConfigTable[S_FPS_DEN] = 1;
 	mConfigTable[S_FPS_ENABLED] = 0;
 	mConfigTable[S_DISABLE_OCL] = 0;
+	mConfigTable[S_CONVTYPE] = 0;
 }
 
 bool CodecInst::ReadRegistry()
@@ -333,6 +334,15 @@ static void DialogUpdate(HWND hwndDlg, CodecInst* pinst) {
 		SendDlgItemMessage(hwndDlg, IDC_RCM, CB_ADDSTRING, 0, (LPARAM)TEXT("Constant Bit Rate"));
 		SendDlgItemMessage(hwndDlg, IDC_RCM, CB_ADDSTRING, 0, (LPARAM)TEXT("Peak Constrained VBR"));
 		SendDlgItemMessage(hwndDlg, IDC_RCM, CB_ADDSTRING, 0, (LPARAM)TEXT("Latency Constrained VBR"));
+	}
+
+	if (SendMessage(GetDlgItem(hwndDlg, IDC_CONVTYPE), CB_GETCOUNT, 0, 0) == 0)
+	{
+		SendDlgItemMessage(hwndDlg, IDC_CONVTYPE, CB_ADDSTRING, 0, (LPARAM)TEXT("D3D11 DirectCompute (Win8+, RGB32 only)"));
+		SendDlgItemMessage(hwndDlg, IDC_CONVTYPE, CB_ADDSTRING, 0, (LPARAM)TEXT("AMF Converter (RGB32 only)"));
+		SendDlgItemMessage(hwndDlg, IDC_CONVTYPE, CB_ADDSTRING, 0, (LPARAM)TEXT("OpenCL"));
+		SendDlgItemMessage(hwndDlg, IDC_CONVTYPE, CB_ADDSTRING, 0, (LPARAM)TEXT("CPU"));
+		SendDlgItemMessage(hwndDlg, IDC_CONVTYPE, CB_SETCURSEL, pinst->mConfigTable[S_CONVTYPE], 0);
 	}
 
 	if (SendMessage(GetDlgItem(hwndDlg, IDC_DEVICEIDX), CB_GETCOUNT, 0, 0) == 0)
@@ -486,6 +496,8 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 			case IDC_COLOR_PROFILE:
 				pinst->mConfigTable[S_COLORPROF] = (int)SendDlgItemMessage(hwndDlg, IDC_COLOR_PROFILE, CB_GETCURSEL, 0, 0);
 				break;
+			case IDC_CONVTYPE:
+				pinst->mConfigTable[S_CONVTYPE] = (int)SendDlgItemMessage(hwndDlg, IDC_CONVTYPE, CB_GETCURSEL, 0, 0);
 			default:
 				return FALSE;
 			}
