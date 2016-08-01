@@ -100,6 +100,7 @@ class AMFConverterSubmitter;
 class OpenCLSubmitter;
 class DX11Submitter;
 class DX11ComputeSubmitter;
+class HostSubmitter;
 
 class CodecInst {
 	// Ehhhhh
@@ -109,6 +110,7 @@ class CodecInst {
 	friend class OpenCLSubmitter;
 	friend class DX11Submitter;
 	friend class DX11ComputeSubmitter;
+	friend class HostSubmitter;
 private:
 	Logger *mLog;
 	int started;	//if the codec has been properly initalized yet
@@ -274,6 +276,16 @@ public:
 
 	bool Init();
 	bool loadComputeShader();
+	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
+};
+
+class HostSubmitter : public Submitter
+{
+public:
+	CodecInst*			mInstance;
+	HostSubmitter(CodecInst *instance) : mInstance(instance)
+	{
+	}
 	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
 };
 

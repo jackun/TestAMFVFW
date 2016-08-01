@@ -4,8 +4,8 @@
 #include <VersionHelpers.h>
 
 using hrc = std::chrono::high_resolution_clock;
-void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int inpitch);
-void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int inpitch);
+void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch);
+void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch);
 void BGRtoNV12(const uint8_t * src, uint8_t * yuv, unsigned bytesPerPixel, uint8_t flip, int srcFrameWidth, int srcFrameHeight, uint32_t yuvPitch);
 
 #define Log(...) LogMsg(false, __VA_ARGS__)
@@ -239,12 +239,18 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	{
 	case amf::AMF_SURFACE_BGRA:
 	{
+		// 0 - DXCompute, 1 - AMF, 2 - openCL, 3 - CPU
 		if (mCLConv /*|| lpbiIn->biBitCount == 24*/ && mConfigTable[S_CONVTYPE] == 2)
 			mSubmitter = new OpenCLSubmitter(this);
 		else
 		{
 			if (mConfigTable[S_CONVTYPE] == 3)
-				mSubmitter = new DX11Submitter(this); // slow CPU conversion
+			{
+				if (IsWindows8OrGreater())
+					mSubmitter = new DX11Submitter(this);
+				else
+					mSubmitter = new HostSubmitter(this);
+			}
 			else if (lpbiIn->biBitCount == 32)
 			{
 				if (mConfigTable[S_CONVTYPE] == 0 && IsWindows8OrGreater())
@@ -257,7 +263,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 				}
 			}
 			else
-				mSubmitter = new DX11Submitter(this); // slow CPU conversion
+				mSubmitter = new HostSubmitter(this); // slow CPU conversion
 		}
 	}
 	break;
@@ -580,11 +586,14 @@ DWORD AMFConverterSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int
 	amf::AMFSurfacePtr surface;
 	amf::AMFDataPtr convData;
 	AMF_RESULT res;
+
+	static bool isWin8OrGreater = IsWindows8OrGreater();
 	Profile(AllocSurface)
 
 	switch (mInstance->mFmtIn)
 	{
 	case amf::AMF_SURFACE_BGRA:
+	if (isWin8OrGreater)
 	{
 		// Copy and flip RGB32 to AMF surface
 		res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_DX11, amf::AMF_SURFACE_BGRA, mInstance->mWidth, mInstance->mHeight, &surface);
@@ -634,36 +643,35 @@ DWORD AMFConverterSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int
 		pCtx->Release();
 		pDevice->Release();
 	}
-	break;
-		case amf::AMF_SURFACE_LAST:
-		{
-			// Copy and flip RGB32 to AMF surface
-			res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_HOST, mInstance->mFmtIn, mInstance->mWidth, mInstance->mHeight, &surface);
-			if (res != AMF_OK)
-				return ICERR_INTERNAL;
-			amf::AMFPlanePtr plane = surface->GetPlaneAt(0);
-			int pitch = plane->GetHPitch();
-			auto ptr = (uint8_t*)plane->GetNative();
-			int inPitch = inhdr->biBitCount / 8 * mInstance->mWidth;
-
-			// Flip it
-			for (int h = mInstance->mHeight - 1; h >= 0; h--, ptr += pitch)
-			{
-				memcpy(ptr, (uint8_t*)data + h * inPitch, inPitch);
-			}
-		}
-		break;
-		case amf::AMF_SURFACE_YV12:
-			res = mInstance->mContext->CreateSurfaceFromHostNative(mInstance->mFmtIn,
-				mInstance->mWidth, mInstance->mHeight,
-				mInstance->mWidth, mInstance->mHeight,
-				data, &surface, nullptr);
-
-			if (res != AMF_OK)
-				return ICERR_INTERNAL;
-			break;
-		default:
+	else
+	{
+		// Copy and flip RGB32 to AMF surface
+		res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_HOST, mInstance->mFmtIn, mInstance->mWidth, mInstance->mHeight, &surface);
+		if (res != AMF_OK)
 			return ICERR_INTERNAL;
+		amf::AMFPlanePtr plane = surface->GetPlaneAt(0);
+		int pitch = plane->GetHPitch();
+		auto ptr = (uint8_t*)plane->GetNative();
+		int inPitch = inhdr->biBitCount / 8 * mInstance->mWidth;
+
+		// Flip it
+		for (int h = mInstance->mHeight - 1; h >= 0; h--, ptr += pitch)
+		{
+			memcpy(ptr, (uint8_t*)data + h * inPitch, inPitch);
+		}
+	}
+	break;
+	case amf::AMF_SURFACE_YV12:
+		res = mInstance->mContext->CreateSurfaceFromHostNative(mInstance->mFmtIn,
+			mInstance->mWidth, mInstance->mHeight,
+			mInstance->mWidth, mInstance->mHeight,
+			data, &surface, nullptr);
+
+		if (res != AMF_OK)
+			return ICERR_INTERNAL;
+		break;
+	default:
+		return ICERR_INTERNAL;
 	}
 
 	surface->SetPts(pts);
@@ -792,9 +800,9 @@ DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 				//memset(lockedRect.pData, 128, lockedRect.RowPitch * h * 3 / 2);
 				//BGRtoNV12((const uint8_t*)data, (uint8_t*)lockedRect.pData, inhdr->biBitCount / 8, 1, w, h, lockedRect.RowPitch);
 				if (inhdr->biBitCount == 24)
-					ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, lockedRect.RowPitch);
+					ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, lockedRect.RowPitch, h);
 				else
-					ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, lockedRect.RowPitch);
+					ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, lockedRect.RowPitch, h);
 
 				// Set useCPU to true
 				//if (!mInstance->mDeviceCL.ConvertBuffer(data, inhdr->biSizeImage, lockedRect.pData, lockedRect.RowPitch))
@@ -828,6 +836,28 @@ DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 		return ICERR_INTERNAL;
 
 	EndProfile
+	return ICERR_OK;
+}
+
+DWORD HostSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
+{
+	amf::AMFSurfacePtr surface;
+	AMF_RESULT res;
+	LONG w = mInstance->mWidth, h = mInstance->mHeight;
+	res = mInstance->mContext->AllocSurface(amf::AMF_MEMORY_HOST, amf::AMF_SURFACE_NV12, w, h, &surface);
+	if (res != AMF_OK)
+		return ICERR_INTERNAL;
+
+	void *dst = surface->GetPlaneAt(0)->GetNative();
+	int32_t hpitch = surface->GetPlaneAt(0)->GetHPitch();
+	int32_t vpitch = surface->GetPlaneAt(0)->GetVPitch();
+
+	if (inhdr->biBitCount == 24)
+		ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, hpitch, vpitch);
+	else
+		ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, hpitch, vpitch);
+
+	mInstance->mEncoder->SubmitInput(surface);
 	return ICERR_OK;
 }
 
@@ -1202,7 +1232,7 @@ void BGRtoNV12(const uint8_t * src,
 }
 
 // Rec.601
-void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int outpitch) {
+void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch) {
 	const __m128i fraction = _mm_setr_epi32(0x84000, 0x84000, 0x84000, 0x84000);    //= 0x108000/2 = 0x84000
 	const __m128i neg32 = _mm_setr_epi32(-32, -32, -32, -32);
 	const __m128i y1y2_mult = _mm_setr_epi32(0x4A85, 0x4A85, 0x4A85, 0x4A85);
@@ -1213,12 +1243,12 @@ void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udes
 	const __m128i cybgr_64 = _mm_setr_epi16(0, 0x0c88, 0x4087, 0x20DE, 0x0c88, 0x4087, 0x20DE, 0);
 
 	for (unsigned int y = 0; y<h; y += 2) {
-		uint8_t *ydst = ydest + (h - y - 1) * outpitch;
+		uint8_t *ydst = ydest + (h - y - 1) * hpitch;
 		//YV12
-		//uint8_t *udst = udest + (h - y - 2) / 2 * outpitch / 2;
-		//uint8_t *vdst = vdest + (h - y - 2) / 2 * outpitch / 2;
+		//uint8_t *udst = udest + (h - y - 2) / 2 * hpitch / 2;
+		//uint8_t *vdst = vdest + (h - y - 2) / 2 * hpitch / 2;
 		//NV12
-		uint8_t *uvdst = ydest + outpitch * h + (h - y - 2) / 2 * outpitch;
+		uint8_t *uvdst = ydest + hpitch * vpitch + (h - y - 2) / 2 * hpitch;
 
 		for (unsigned int x = 0; x<w; x += 4) {
 			__m128i rgb0 = _mm_cvtsi32_si128(*(int*)&src[y*w * 3 + x * 3]);
@@ -1287,7 +1317,7 @@ void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udes
 			//}
 
 			*(int *)&ydst[x] = _mm_cvtsi128_si32(luma0);
-			*(int *)&ydst[x - outpitch] = _mm_cvtsi128_si32(luma2);
+			*(int *)&ydst[x - hpitch] = _mm_cvtsi128_si32(luma2);
 
 
 			chroma0 = _mm_slli_epi64(chroma0, 14);
@@ -1320,13 +1350,14 @@ void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udes
 			//*(unsigned short *)&vdst[x / 2] = _mm_extract_epi16(chroma0, 1);
 
 			//NV12
-			*(int *)&uvdst[x] = _mm_extract_epi32(chroma0, 0);
-			//*(unsigned short *)&uvdst[x + 2] = _mm_extract_epi16(chroma0, 1);
+			//*(int *)&uvdst[x] = _mm_extract_epi32(chroma0, 0); // SSE4
+			*(unsigned short *)&uvdst[x] = _mm_extract_epi16(chroma0, 0);
+			*(unsigned short *)&uvdst[x + 2] = _mm_extract_epi16(chroma0, 1);
 		}
 	}
 }
 
-void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, unsigned int w, unsigned int h, unsigned int outpitch) {
+void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch) {
 	const __m128i fraction = _mm_setr_epi32(0x84000, 0x84000, 0x84000, 0x84000);    //= 0x108000/2 = 0x84000
 	const __m128i neg32 = _mm_setr_epi32(-32, -32, -32, -32);
 	const __m128i y1y2_mult = _mm_setr_epi32(0x4A85, 0x4A85, 0x4A85, 0x4A85);
@@ -1335,12 +1366,12 @@ void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, uns
 	const __m128i cybgr_64 = _mm_setr_epi16(0x0c88, 0x4087, 0x20DE, 0, 0x0c88, 0x4087, 0x20DE, 0);
 
 	for (unsigned int y = 0; y<h; y += 2) {
-		uint8_t *ydst = ydest + (h - y - 1) * outpitch;
+		uint8_t *ydst = ydest + (h - y - 1) * hpitch;
 		//YV12
-		//uint8_t *udst = udest + (h - y - 2) / 2 * outpitch / 2;
-		//uint8_t *vdst = vdest + (h - y - 2) / 2 * outpitch / 2;
+		//uint8_t *udst = udest + (h - y - 2) / 2 * hpitch / 2;
+		//uint8_t *vdst = vdest + (h - y - 2) / 2 * hpitch / 2;
 		//NV12
-		uint8_t *uvdst = ydest + outpitch * h + (h - y - 2) / 2 * outpitch;
+		uint8_t *uvdst = ydest + hpitch * vpitch + (h - y - 2) / 2 * hpitch;
 
 		for (unsigned int x = 0; x<w; x += 4) {
 			__m128i rgb0 = _mm_loadl_epi64((__m128i*)&src[y*w * 4 + x * 4]);
@@ -1402,7 +1433,7 @@ void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, uns
 			//}
 
 			*(int *)&ydst[x] = _mm_cvtsi128_si32(luma0);
-			*(int *)&ydst[x - outpitch] = _mm_cvtsi128_si32(luma2);
+			*(int *)&ydst[x - hpitch] = _mm_cvtsi128_si32(luma2);
 
 			chroma0 = _mm_srli_epi64(chroma0, 2);
 			chroma1 = _mm_srli_epi64(chroma1, 2);
@@ -1431,7 +1462,9 @@ void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, uns
 
 			//*(unsigned short *)&udst[x / 2] = _mm_extract_epi16(chroma0, 0);
 			//*(unsigned short *)&vdst[x / 2] = _mm_extract_epi16(chroma0, 1);
-			*(int *)&uvdst[x] = _mm_extract_epi32(chroma0, 0);
+			//*(int *)&uvdst[x] = _mm_extract_epi32(chroma0, 0); //SSE4
+			*(unsigned short *)&uvdst[x] = _mm_extract_epi16(chroma0, 0);
+			*(unsigned short *)&uvdst[x + 2] = _mm_extract_epi16(chroma0, 1);
 		}
 	}
 }
