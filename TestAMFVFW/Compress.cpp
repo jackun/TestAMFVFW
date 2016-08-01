@@ -241,37 +241,55 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	{
 		// 0 - DXCompute, 1 - AMF, 2 - openCL, 3 - CPU
 		if (mCLConv /*|| lpbiIn->biBitCount == 24*/ && mConfigTable[S_CONVTYPE] == 2)
+		{
 			mSubmitter = new OpenCLSubmitter(this);
+			LogMsg(false, L"Selected converter: OpenCLSubmitter");
+		}
 		else
 		{
 			if (mConfigTable[S_CONVTYPE] == 3)
 			{
 				if (IsWindows8OrGreater())
+				{
 					mSubmitter = new DX11Submitter(this);
+					LogMsg(false, L"Selected converter: DX11Submitter");
+				}
 				else
+				{
 					mSubmitter = new HostSubmitter(this);
+					LogMsg(false, L"Selected converter: HostSubmitter");
+				}
 			}
 			else if (lpbiIn->biBitCount == 32)
 			{
 				if (mConfigTable[S_CONVTYPE] == 0 && IsWindows8OrGreater())
+				{
 					mSubmitter = new DX11ComputeSubmitter(this);
+					LogMsg(false, L"Selected converter: DX11ComputeSubmitter");
+				}
 				else
 				{
 					//mSubmitter = new DX11Submitter(this);
 					mSubmitter = new AMFConverterSubmitter(this);
 					usingAMFConv = true;
+					LogMsg(false, L"Selected converter: fallback AMFConverterSubmitter");
 				}
 			}
 			else
+			{
 				mSubmitter = new HostSubmitter(this); // slow CPU conversion
+				LogMsg(false, L"Selected converter: fallback HostSubmitter");
+			}
 		}
 	}
 	break;
 	case amf::AMF_SURFACE_NV12:
 		mSubmitter = new NV12Submitter(this);
+		LogMsg(false, L"Selected converter: NV12Submitter");
 		break;
 	default:
 		mSubmitter = new AMFConverterSubmitter(this);
+		LogMsg(false, L"Selected converter: AMFConverterSubmitter");
 		usingAMFConv = true;
 		break;
 	}
