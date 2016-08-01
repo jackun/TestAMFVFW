@@ -241,7 +241,7 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	mOutImgY = clCreateImage2D(mContext,
 		//TODO tweak these
 		//CL_MEM_WRITE_ONLY,
-		CL_MEM_WRITE_ONLY | CL_MEM_USE_PERSISTENT_MEM_AMD,
+		CL_MEM_WRITE_ONLY /*| CL_MEM_USE_PERSISTENT_MEM_AMD*/,
 		&imgf, mAlignedWidth, mAlignedHeight, 0, nullptr, &status);
 	RETURNIFERROR(status, L"Failed to create Y image.\n");
 
@@ -252,7 +252,7 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	int uv_height = (mAlignedHeight + 1) / 2;
 
 	mOutImgUV = clCreateImage2D(mContext,
-		CL_MEM_WRITE_ONLY | CL_MEM_USE_PERSISTENT_MEM_AMD,
+		CL_MEM_WRITE_ONLY /*| CL_MEM_USE_PERSISTENT_MEM_AMD*/,
 		&imgf, uv_width, uv_height,
 		0, nullptr, &status);
 	RETURNIFERROR(status, L"Failed to create UV image.\n");
@@ -289,7 +289,7 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 	//RETURNIFERROR(status, L"clCreateKernel(UV) failed!\n");
 
 	int inSize = mWidth * mHeight * bpp / 8 + ((mWidth * bpp / 8) % 4) * mHeight;
-	int inSizeAligned = (inSize + 255) & ~255; //unnecessery?
+	int inSizeAligned = (inSize + 255) & ~255; //unnecessary? necessary for pinned memory
 
 	mInBuf = clCreateBuffer(
 		mContext,
@@ -300,18 +300,14 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 		&status);
 	RETURNIFERROR(status, L"clCreateBuffer failed!\n");
 
-	/*if (!setKernelArgs(mKernelY, mInBuf, mOutImgY) ||
-		!setKernelArgs(mKernelUV, mInBuf, mOutImgUV))
-		return false;*/
-
-	if (!setKernelArgs(mKernelY, mInBuf, mOutImgY, mOutImgUV))
+	if (!SetKernelArgs(mKernelY, mInBuf, mOutImgY, mOutImgUV))
 		return false;
 
 	mBufferCopyManager.Start(3);
 	return true;
 }
 
-bool DeviceOCL::setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output, cl_mem outputUV)
+bool DeviceOCL::SetKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output, cl_mem outputUV)
 {
 	cl_int status = 0;
 
@@ -333,9 +329,11 @@ bool DeviceOCL::setKernelArgs(cl_kernel kernel, cl_mem input, cl_mem output, cl_
 bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destPitch)
 {
 	cl_int status = 0;
-	cl_event unmapEvent;
+	cl_event evt;
 	cl_event ndrEvents[2];
 	size_t globalThreads[] = { mWidth>>1, mHeight>>1 };
+
+	size_t sizeAligned = (size + 255) & ~255; //necessary for pinned memory
 
 	Profile(MapBuffer)
 	void *mapPtr = clEnqueueMapBuffer(mCmdQueue,
@@ -344,27 +342,30 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 		//CL_FALSE,
 		CL_MAP_WRITE_INVALIDATE_REGION,
 		0,
-		size,
+		sizeAligned,
 		0,
 		NULL,
 		NULL,
 		&status);
 	RETURNIFERROR(status, L"clEnqueueMapBuffer() failed.\n");
 
-	//memcpy(mapPtr, inBuf, size);
-	mBufferCopyManager.SetData(inBuf, mapPtr, size);
-	mBufferCopyManager.Wait();
+	memcpy(mapPtr, inBuf, size);
+	//mBufferCopyManager.SetData(inBuf, mapPtr, size);
+	//mBufferCopyManager.Wait();
 
 	status = clEnqueueUnmapMemObject(mCmdQueue,
 		mInBuf,
 		mapPtr,
 		0,
 		NULL,
-		&unmapEvent);
+		&evt);
+
 	status = clFlush(mCmdQueue);
-	status = clWaitForEvents(1, &unmapEvent);
+	status = clWaitForEvents(1, &evt);
+
 	if (status != CL_SUCCESS) Log(L"clWaitForEvents(unmapEvent) failed: %d.\n", status);
-	clReleaseEvent(unmapEvent);
+	clReleaseEvent(evt);
+
 	//status = clEnqueueBarrier(mCmdQueue);
 	//if (status != CL_SUCCESS) Log(L"clEnqueueBarrier failed: %d.\n", status);
 	EndProfile
@@ -385,6 +386,8 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 
 	status = clWaitForEvents(1, ndrEvents);
 	if (status != CL_SUCCESS) Log(L"clWaitForEvents(ndrEvents) failed: %d.\n", status);
+
+	EndProfile
 
 #ifdef _DEBUG
 	double timing = 0;
@@ -449,8 +452,6 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 		status = clEnqueueUnmapMemObject(mCmdQueue, mOutImgUV, pUV, 0, nullptr, nullptr);
 		if (status != CL_SUCCESS) Log(L"clEnqueueUnmapMemObject(pUV) failed: %d.\n", status);
 	}
-
-	EndProfile
 
 	return true;
 }
