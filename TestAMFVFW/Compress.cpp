@@ -1335,7 +1335,7 @@ void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udes
 			//}
 
 			*(int *)&ydst[x] = _mm_cvtsi128_si32(luma0);
-			*(int *)&ydst[x - hpitch] = _mm_cvtsi128_si32(luma2);
+			*(int *)&ydst[x - size_t(hpitch)] = _mm_cvtsi128_si32(luma2);
 
 
 			chroma0 = _mm_slli_epi64(chroma0, 14);
@@ -1451,7 +1451,7 @@ void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, uns
 			//}
 
 			*(int *)&ydst[x] = _mm_cvtsi128_si32(luma0);
-			*(int *)&ydst[x - hpitch] = _mm_cvtsi128_si32(luma2);
+			*(int *)&ydst[x - size_t(hpitch)] = _mm_cvtsi128_si32(luma2);
 
 			chroma0 = _mm_srli_epi64(chroma0, 2);
 			chroma1 = _mm_srli_epi64(chroma1, 2);
