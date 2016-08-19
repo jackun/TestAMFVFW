@@ -6,15 +6,6 @@ REM set OLDDIR=%CD%
 pushd %~dp0%
 
 REG.exe Query %RegQry% > checkOS.txt
-echo Using as install path: "%~dp0%Runtimes"
-echo Add install path for current user (64bit or 32bit systems only)...
-REG.exe Add HKCU\Software\TestAMFVFW /v InstallPath  /t REG_SZ /f /d "%~dp0%Runtimes"
-echo Add install path for local machine (64bit or 32bit systems only)...
-REG.exe Add HKLM\Software\TestAMFVFW /v InstallPath  /t REG_SZ /f /d "%~dp0%Runtimes"
-echo Add install path for current user (32bit on 64bit machine)...
-%systemroot%\SysWOW64\REG.exe Add HKCU\Software\TestAMFVFW /v InstallPath  /t REG_SZ /f /d "%~dp0%Runtimes"
-echo Add install path for local machine (32bit on 64bit machine)...
-%systemroot%\SysWOW64\REG.exe Add HKLM\Software\TestAMFVFW /v InstallPath  /t REG_SZ /f /d "%~dp0%Runtimes"
  
 Find /i "x86" < CheckOS.txt > StringCheck.txt
  
