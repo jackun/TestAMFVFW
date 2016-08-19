@@ -310,16 +310,19 @@ CodecInst* Open(ICOPEN* icinfo) {
 	CodecInst* pinst = NULL;
 
 	if (icinfo)
-		pinst = new CodecInst();
+	{
+		try {
+			pinst = new CodecInst();
+		}
+		catch (...) {
 
-	//pinst->Log(L"Open\n");
-
-	if (icinfo) icinfo->dwError = pinst ? ICERR_OK : ICERR_MEMORY;
+		}
+		icinfo->dwError = pinst ? ICERR_OK : ICERR_MEMORY;
+	}
 	//TODO Sometimes DRV_OPEN is called with lParam2 == 0, just return 1 then
 	return pinst ? pinst : (CodecInst*)1;
 }
 
-//Something weird goes on with Dxtory
 DWORD Close(CodecInst* pinst) {
 	try {
 		if (pinst) {
