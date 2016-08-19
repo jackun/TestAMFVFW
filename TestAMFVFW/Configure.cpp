@@ -414,11 +414,11 @@ static void DialogUpdate(HWND hwndDlg, CodecInst* pinst) {
 
 	case RCM_CBR:
 		SetDlgItemText(hwndDlg, IDC_RC_LABEL, TEXT("Constant bitrate (kbit/s)"));
-		SetDlgItemText(hwndDlg, IDC_RC_LOW_LABEL, TEXT("1"));
+		SetDlgItemText(hwndDlg, IDC_RC_LOW_LABEL, TEXT("10"));
 		swprintf(temp, 1023, TEXT("%d"), MAX_BITRATE);
 		SetDlgItemText(hwndDlg, IDC_RC_HIGH_LABEL, temp);
 		SetDlgItemInt(hwndDlg, IDC_RC_VAL, pinst->mConfigTable[S_BITRATE], FALSE);
-		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMIN, TRUE, 1);
+		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMIN, TRUE, 10);
 		//SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMAX, TRUE, scale2pos(MAX_BITRATE));
 		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMAX, TRUE, MAX_BITRATE);
 		//SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETPOS, TRUE, scale2pos(pinst->mConfigTable[S_BITRATE]));
@@ -428,11 +428,11 @@ static void DialogUpdate(HWND hwndDlg, CodecInst* pinst) {
 	case RCM_PCVBR:
 	case RCM_LCVBR:
 		SetDlgItemText(hwndDlg, IDC_RC_LABEL, TEXT("Variable bitrate (kbit/s)"));
-		SetDlgItemText(hwndDlg, IDC_RC_LOW_LABEL, TEXT("1"));
+		SetDlgItemText(hwndDlg, IDC_RC_LOW_LABEL, TEXT("10"));
 		wsprintf(temp, TEXT("%d"), MAX_BITRATE);
 		SetDlgItemText(hwndDlg, IDC_RC_HIGH_LABEL, temp);
 		SetDlgItemInt(hwndDlg, IDC_RC_VAL, pinst->mConfigTable[S_BITRATE], FALSE);
-		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMIN, TRUE, 1);
+		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMIN, TRUE, 10);
 		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETRANGEMAX, TRUE, MAX_BITRATE);
 		SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETPOS, TRUE, pinst->mConfigTable[S_BITRATE]);
 		break;
@@ -562,7 +562,7 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 				case RCM_CBR:
 				case RCM_PCVBR:
 				case RCM_LCVBR:
-					CHECKED_SET_MAX_INT(rate, hwndDlg, IDC_RC_VAL, FALSE, 1, MAX_BITRATE);
+					CHECKED_SET_MAX_INT(rate, hwndDlg, IDC_RC_VAL, FALSE, 10, MAX_BITRATE);
 					SendDlgItemMessage(hwndDlg, IDC_RC_VAL_SLIDER, TBM_SETPOS, TRUE, rate);
 					pinst->mConfigTable[S_BITRATE] = rate;
 					break;
@@ -584,7 +584,7 @@ static BOOL CALLBACK ConfigureDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam,
 				pinst->mConfigTable[S_FPS_NUM] = qp;
 				break;
 			case IDC_FPS_DEN:
-				CHECKED_SET_MAX_INT(qp, hwndDlg, IDC_FPS_DEN, FALSE, 1, 0x7FFF);
+				CHECKED_SET_INT(qp, hwndDlg, IDC_FPS_DEN, FALSE, 1, 0x7FFF);
 				SendMessage(GetDlgItem(hwndDlg, IDC_SPIN_FPS_DEN), UDM_SETPOS32, 0, qp);
 				pinst->mConfigTable[S_FPS_DEN] = qp;
 				break;
