@@ -11,7 +11,7 @@ class DeviceOCL
 public:
 	DeviceOCL();
 	~DeviceOCL();
-	bool Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRIX matrix, bool useCPU = false);
+	bool Init(ID3D11Device *pD3DDevice, amf::AMFCompute *amfCompute, int width, int height, COLORMATRIX matrix, bool useCPU = false);
 	bool InitBGRAKernels(int bpp);
 	bool ConvertBuffer(void *inBuf, size_t size, void* dest = nullptr, size_t destPitch = 0);
 	void Terminate();
@@ -45,4 +45,5 @@ private:
 	cl_mem mInBuf, mOutImgY, mOutImgUV, mBuffY, mBuffUV;
 	int mWidth, mHeight, mAlignedWidth, mAlignedHeight;
 	BufferCopyManager mBufferCopyManager;
+	bool mUsingAMFCompute = false;
 };

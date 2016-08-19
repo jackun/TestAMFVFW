@@ -63,28 +63,25 @@ void DeviceOCL::Terminate()
 		clReleaseProgram(mProgram);
 	mProgram = nullptr;
 
-	if (mCmdQueue)
+	if (!mUsingAMFCompute && mCmdQueue)
 		clReleaseCommandQueue(mCmdQueue);
 	mCmdQueue = nullptr;
 
-	if (mDevice)
+	if (!mUsingAMFCompute && mDevice)
 		clReleaseDevice(mDevice);
 	mDevice = nullptr;
 
-	if (mContext)
+	if (!mUsingAMFCompute && mContext)
 		clReleaseContext(mContext);
 	mContext = nullptr;
 }
 
-bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRIX matrix, bool useCPU)
+bool DeviceOCL::Init(ID3D11Device *pD3DDevice, amf::AMFCompute *amfCompute, int width, int height, COLORMATRIX matrix, bool useCPU)
 {
 	size_t strSize = 0;
 	cl_int status = 0;
 	std::vector<cl_context_properties> cps;
 	cl_platform_id platformID = nullptr;
-
-	if (!FindPlatformID(platformID))
-		return false;
 
 	if ((width & 1) || (height & 1)) // not divisible by 2, bugger off
 		return false;
@@ -93,64 +90,92 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 	mHeight = height;
 	mAlignedWidth = ((width + (256 - 1)) & ~(256 - 1));
 	mAlignedHeight = ((height + (32 - 1)) & ~(32 - 1));
+	mUsingAMFCompute = !!amfCompute;
+
+	if (!amfCompute && !FindPlatformID(platformID))
+		return false;
+	else
+	{
+		size_t sz = 0;
+		clGetContextInfo((cl_context)amfCompute->GetNativeContext(), CL_CONTEXT_PROPERTIES, sizeof(cl_context_properties), nullptr, &sz);
+		if (!sz)
+			return false;
+
+		std::vector<cl_context_properties> props(sz);
+		clGetContextInfo((cl_context)amfCompute->GetNativeContext(), CL_CONTEXT_PROPERTIES, sizeof(cl_context_properties) * sz, props.data(), &sz);
+		for (auto p = props.begin(); p != props.end(); p++)
+		{
+			if (*p == CL_CONTEXT_PLATFORM)
+				platformID = (cl_platform_id)*(++p);
+		}
+	}
 
 	status = clGetPlatformInfo(platformID, CL_PLATFORM_EXTENSIONS, 0, nullptr, &strSize);
 	if (!status)
 	{
-		char *exts = new char[strSize];
-		status = clGetPlatformInfo(platformID, CL_PLATFORM_EXTENSIONS, strSize, exts, nullptr);
-		Log(L"CL Platform Extensions: %S.\n", exts);
-		delete[] exts;
+		std::vector<char> exts(strSize);
+		status = clGetPlatformInfo(platformID, CL_PLATFORM_EXTENSIONS, strSize, exts.data(), nullptr);
+		Log(L"CL Platform Extensions: %S.\n", exts.data());
 	}
 
-	if (!useCPU)
+	if (!amfCompute)
 	{
-		clGetDeviceIDsFromD3D11KHR_fn p_clGetDeviceIDsFromD3D11KHR =
-			static_cast<clGetDeviceIDsFromD3D11KHR_fn>
-			(clGetExtensionFunctionAddressForPlatform(platformID, "clGetDeviceIDsFromD3D11KHR"));
-		if (!p_clGetDeviceIDsFromD3D11KHR)
+		if (!useCPU)
 		{
-			Log(L"Cannot resolve ClGetDeviceIDsFromD3D11KHR function.\n");
-			return false;
+			clGetDeviceIDsFromD3D11KHR_fn p_clGetDeviceIDsFromD3D11KHR =
+				static_cast<clGetDeviceIDsFromD3D11KHR_fn>
+				(clGetExtensionFunctionAddressForPlatform(platformID, "clGetDeviceIDsFromD3D11KHR"));
+			if (!p_clGetDeviceIDsFromD3D11KHR)
+			{
+				Log(L"Cannot resolve ClGetDeviceIDsFromD3D11KHR function.\n");
+				return false;
+			}
+
+			status = p_clGetDeviceIDsFromD3D11KHR(platformID, CL_D3D11_DEVICE_KHR,
+				(void*)pD3DDevice, CL_PREFERRED_DEVICES_FOR_D3D11_KHR, 1, &mDevice, NULL);
+			RETURNIFERROR(status, L"clGetDeviceIDsFromD3D11KHR() failed.\n");
+
+			status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, 0, nullptr, &strSize);
+			if (!status)
+			{
+				std::vector<char> exts(strSize);
+				status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, strSize, exts.data(), nullptr);
+				Log(L"CL Device Extensions: %S.\n", exts.data());
+			}
+
+			cps.push_back(CL_CONTEXT_D3D11_DEVICE_KHR);
+			cps.push_back((cl_context_properties)pD3DDevice);
+			cps.push_back(CL_CONTEXT_INTEROP_USER_SYNC);
+			cps.push_back(CL_TRUE);
+		}
+		else
+		{
+			status = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_CPU, 1, &mDevice, nullptr);
+			RETURNIFERROR(status, L"clGetDeviceIDs() failed.\n");
 		}
 
-		status = p_clGetDeviceIDsFromD3D11KHR(platformID, CL_D3D11_DEVICE_KHR,
-			(void*)pD3DDevice, CL_PREFERRED_DEVICES_FOR_D3D11_KHR, 1, &mDevice, NULL);
-		RETURNIFERROR(status, L"clGetDeviceIDsFromD3D11KHR() failed.\n");
+		cps.push_back(CL_CONTEXT_PLATFORM);
+		cps.push_back((cl_context_properties)platformID);
+		cps.push_back(0);
 
-		status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, 0, nullptr, &strSize);
-		if (!status)
-		{
-			char *exts = new char[strSize];
-			status = clGetDeviceInfo(mDevice, CL_DEVICE_EXTENSIONS, strSize, exts, nullptr);
-			Log(L"CL Device Extensions: %S.\n", exts);
-			delete[] exts;
-		}
+		mContext = clCreateContext(&cps[0], 1, &mDevice, NULL, NULL, &status);
+		RETURNIFERROR(status, L"clCreateContext() failed.\n");
 
-		cps.push_back(CL_CONTEXT_D3D11_DEVICE_KHR);
-		cps.push_back((cl_context_properties)pD3DDevice);
+		mCmdQueue = clCreateCommandQueue(mContext, mDevice, (cl_command_queue_properties)
+#ifndef NDEBUG
+			CL_QUEUE_PROFILING_ENABLE
+#else
+			0
+#endif
+			, &status);
+		RETURNIFERROR(status, L"clCreateCommandQueue() failed.\n");
 	}
 	else
 	{
-		status = clGetDeviceIDs(platformID, CL_DEVICE_TYPE_CPU, 1, &mDevice, nullptr);
-		RETURNIFERROR(status, L"clGetDeviceIDs() failed.\n");
+		mContext = (cl_context)amfCompute->GetNativeContext();
+		mDevice = (cl_device_id)amfCompute->GetNativeDeviceID();
+		mCmdQueue = (cl_command_queue)amfCompute->GetNativeCommandQueue();
 	}
-
-	cps.push_back(CL_CONTEXT_PLATFORM);
-	cps.push_back((cl_context_properties)platformID);
-	cps.push_back(0);
-
-	mContext = clCreateContext(&cps[0], 1, &mDevice, NULL, NULL, &status);
-	RETURNIFERROR(status, L"clCreateContext() failed.\n");
-
-	mCmdQueue = clCreateCommandQueue(mContext, mDevice, (cl_command_queue_properties)
-#ifdef _DEBUG
-		CL_QUEUE_PROFILING_ENABLE
-#else
-		0
-#endif
-		, &status);
-	RETURNIFERROR(status, L"clCreateCommandQueue() failed.\n");
 
 	// ---------------------------
 
@@ -220,7 +245,7 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 
 			buildLog.resize(logSize);
 			logStatus = clGetProgramBuildInfo(mProgram, mDevice,
-				CL_PROGRAM_BUILD_LOG, logSize, &buildLog[0], NULL);
+				CL_PROGRAM_BUILD_LOG, logSize, buildLog.data(), NULL);
 
 			RETURNIFERROR(logStatus, L"clGetProgramBuildInfo failed.\n");
 			Log(
@@ -228,7 +253,7 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, int width, int height, COLORMATRI
 				L" ************************************************\n"
 				L" %S"
 				L" ************************************************\n",
-				&buildLog[0]);
+				buildLog.data());
 		}
 
 		RETURNIFERROR(status, L"clBuildProgram() failed.\n");

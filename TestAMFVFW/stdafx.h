@@ -38,8 +38,10 @@ inline bool ends_with(std::string const & value, std::string const & ending)
 	return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
 }
 
-#include <amf\components\Component.h>
-#include <amf\components\VideoConverterCaps.h>
-#include <amf\components\VideoEncoderVCECaps.h>
-#include <amf\components\VideoEncoderVCE.h>
-#include <amf\components\VideoConverter.h>
+#include "core\Factory.h"
+#include "components\VideoEncoderVCE.h"
+#include "components\VideoConverter.h"
+
+//Copied from Media SDK
+#include "components\VideoConverterCaps.h"
+#include "components\VideoEncoderVCECaps.h"

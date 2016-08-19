@@ -118,7 +118,12 @@ class CodecInst {
 private:
 	Logger *mLog;
 	int started;	//if the codec has been properly initalized yet
-	HMODULE hModCore, hModVCE;
+	HMODULE hModRuntime;
+	AMFInit_Fn AMFInit = nullptr;
+	AMFQueryVersion_Fn AMFQueryVersion = nullptr;
+	amf::AMFFactory *mAMFFactory = nullptr;
+	amf::AMFComputePtr mCompute;
+	amf::AMFComputeDevicePtr mComputeDev;
 
 	DeviceOCL mDeviceCL;
 	amf::AMFContextPtr   mContext;
@@ -144,7 +149,7 @@ private:
 	UINT32 fps_num;
 	UINT32 fps_den;
 
-	bool FindDLLs();
+	bool BindDLLs();
 	void PrintProps(amf::AMFPropertyStorage *props);
 
 public:

@@ -14,7 +14,6 @@ using hrc = std::chrono::high_resolution_clock;
 		AMF_RESULT r = component->SetProperty(var, val); \
 		if(r != AMF_OK){ \
 			LogMsg(false, L"Failed to set %s.", L#var); \
-			Dbg(L"Failed to set %s.\n", L#var); \
 		}\
 	} while(0)
 
@@ -33,49 +32,38 @@ void CodecInst::PrintProps(amf::AMFPropertyStorage *props)
 			{
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_EMPTY:
 				Log(TEXT("%s = <empty>"), name);
-				Dbg(TEXT("%s = <empty>\n"), name);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_BOOL:
 				Log(TEXT("%s = <bool>%d"), name, var.boolValue);
-				Dbg(TEXT("%s = <bool>%d\n"), name, var.boolValue);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_INT64:
 				Log(TEXT("%s = %lld"), name, var.int64Value);
-				Dbg(TEXT("%s = %lld\n"), name, var.int64Value);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_STRING:
-				Log(TEXT("%s = <str>%s"), name, var.stringValue);
-				Dbg(TEXT("%s = <str>%s\n"), name, var.stringValue);
+				Log(TEXT("%s = <str>%S"), name, var.stringValue);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_WSTRING:
 				Log(TEXT("%s = <wstr>%s"), name, var.wstringValue);
-				Dbg(TEXT("%s = <wstr>%s\n"), name, var.wstringValue);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_SIZE:
 				Log(TEXT("%s = <size>%dx%d"), name, var.sizeValue.width, var.sizeValue.height);
-				Dbg(TEXT("%s = <size>%dx%d\n"), name, var.sizeValue.width, var.sizeValue.height);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_RATE:
 				Log(TEXT("%s = <rate>%d/%d"), name, var.rateValue.num, var.rateValue.den);
-				Dbg(TEXT("%s = <rate>%d/%d\n"), name, var.rateValue.num, var.rateValue.den);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_RATIO:
 				Log(TEXT("%s = <ratio>%d/%d"), name, var.ratioValue.num, var.ratioValue.den);
-				Dbg(TEXT("%s = <ratio>%d/%d\n"), name, var.ratioValue.num, var.ratioValue.den);
 				break;
 			case amf::AMF_VARIANT_TYPE::AMF_VARIANT_INTERFACE:
 				Log(TEXT("%s = <interface>"), name);
-				Dbg(TEXT("%s = <interface>\n"), name);
 				break;
 			default:
 				Log(TEXT("%s = <type %d>"), name, var.type);
-				Dbg(TEXT("%s = <type %d>\n"), name, var.type);
 			}
 		}
 		else
 		{
 			Log(TEXT("Failed to get property at index %d"), i);
-			Dbg(TEXT("Failed to get property at index %d\n"), i);
 		}
 	}
 }
@@ -170,8 +158,11 @@ DWORD CodecInst::CompressGetFormat(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER
 // initalize the codec for compression
 DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpbiOut){
 	AMF_RESULT res = AMF_OK;
-	amf::H264EncoderCapsPtr encCaps;
+	//amf::H264EncoderCapsPtr encCaps;
+	amf::AMFCapsPtr encCaps;
 	bool usingAMFConv = false;
+	amf::AMFComputeFactoryPtr amfComputeFactory;
+	amf::AMFTrace *trace = nullptr;
 
 	if (started == 0x1337){
 		LogMsg(false, L"CompressBegin: already began compressing, exiting...");
@@ -194,6 +185,59 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	if (fps_num && fps_den)
 		mFrameDuration = ((amf_pts)10000000000 / ((amf_pts)fps_num * 1000 / fps_den));
 
+	amf_uint64 version = 0;
+	AMFQueryVersion(&version);
+
+#define STRFYVER(x) \
+	(int)(x>>48) & 0xFFFF, (int)(x>>32) & 0xFFFF, (int)(x>>16) & 0xFFFF, (int)x & 0xFFFF
+
+	LogMsg(false, L"AMF version %d.%d.%d.%d, trying to init with version %d.%d.%d.%d",
+		STRFYVER(version),
+		AMF_VERSION_MAJOR, AMF_VERSION_MINOR, AMF_VERSION_RELEASE, AMF_VERSION_BUILD_NUM);
+
+#undef STRFYVER
+
+	res = AMFInit(AMF_FULL_VERSION, &mAMFFactory);
+	if (res != AMF_OK)
+		goto fail;
+
+	mAMFFactory->GetTrace(&trace);
+
+#ifndef NDEBUG
+	amf::AMFDebug *amfDebug = nullptr;
+	if (mAMFFactory->GetDebug(&amfDebug) == AMF_OK && amfDebug)
+	{
+		amfDebug->AssertsEnable(true);
+		amfDebug->EnablePerformanceMonitor(true);
+	}
+
+	if (trace)
+	{
+		trace->SetGlobalLevel(AMF_TRACE_TEST);
+	}
+#endif
+
+	res = mAMFFactory->CreateContext(&mContext);
+	if (res != AMF_OK)
+		goto fail;
+
+	mContext->GetOpenCLComputeFactory(&amfComputeFactory);
+	Dbg(L"Compute devices: %d\n", amfComputeFactory->GetDeviceCount());
+
+	for (int i = 0; i < amfComputeFactory->GetDeviceCount(); i++)
+	{
+		amf::AMFComputeDevicePtr device;
+		amfComputeFactory->GetDeviceAt(i, &device);
+		PrintProps(device);
+	}
+
+	if (amfComputeFactory->GetDeviceCount())
+	{
+		amfComputeFactory->GetDeviceAt(0, &mComputeDev);
+		if (mComputeDev->CreateCompute(nullptr, &mCompute) != AMF_OK)
+			goto fail;
+	}
+
 	mFmtIn = amf::AMF_SURFACE_BGRA;
 	switch (lpbiIn->biCompression)
 	{
@@ -214,13 +258,14 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		goto fail;
 	}
 
-	if (!FindDLLs())
+	if (!BindDLLs())
 		goto fail;
 
 	if (!mDeviceDX11.Create(mConfigTable[S_DEVICEIDX], false))
 		goto fail;
 
-	if (!mDeviceCL.Init(mDeviceDX11.GetDevice(), mWidth, mHeight,
+	if (!mDeviceCL.Init(mDeviceDX11.GetDevice(), nullptr, mWidth, mHeight,
+	//if (!mDeviceCL.Init(nullptr, mCompute, mWidth, mHeight,
 			mConfigTable[S_COLORPROF] == AMF_VIDEO_CONVERTER_COLOR_PROFILE_601 ? BT601_FULL : BT709_FULL))
 		mCLConv = false;
 
@@ -292,10 +337,6 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		break;
 	}
 
-	res = AMFCreateContext(&mContext);
-	if (res != AMF_OK)
-		goto fail;
-
 	res = mContext->InitDX11(mDeviceDX11.GetDevice(), amf::AMF_DX11_0);
 	if (res != AMF_OK)
 		goto fail;
@@ -304,13 +345,14 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	if (mCLConv)
 	{
 		res = mContext->InitOpenCL(mDeviceCL.GetCmdQueue());
+		//res = mContext->InitOpenCLEx(mComputeDev);
 		if (res != AMF_OK)
 			goto fail;
 	}
 
 	if (usingAMFConv)
 	{
-		res = AMFCreateComponent(mContext, AMFVideoConverter, &mConverter);
+		res = mAMFFactory->CreateComponent(mContext, AMFVideoConverter, &mConverter);
 		if (res != AMF_OK)
 			goto fail;
 
@@ -324,7 +366,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 			goto fail;
 	}
 
-	res = AMFCreateComponent(mContext, AMFVideoEncoderVCE_AVC, &mEncoder);
+	res = mAMFFactory->CreateComponent(mContext, AMFVideoEncoderVCE_AVC, &mEncoder);
 	if (res != AMF_OK)
 		goto fail;
 
@@ -371,9 +413,10 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	if (!mSubmitter->Init())
 		goto fail;
 
-	if (mEncoder->QueryInterface(amf::AMFH264EncoderCaps::IID(), (void**)&encCaps) == AMF_OK)
+	if (mEncoder->GetCaps(&encCaps) == AMF_OK && trace)
+	//if (mEncoder->QueryInterface(amf::AMFH264EncoderCaps::IID(), (void**)&encCaps) == AMF_OK)
 	{
-		TCHAR* accelType[] = {
+		const TCHAR* accelType[] = {
 			TEXT("NOT_SUPPORTED"),
 			TEXT("HARDWARE"),
 			TEXT("GPU"),
@@ -381,10 +424,10 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		};
 		Log(TEXT("Capabilities:"));
 		Log(TEXT("  Accel type: %s"), accelType[(encCaps->GetAccelerationType() + 1) % 4]);
-		Log(TEXT("  Max bitrate: %d"), encCaps->GetMaxBitrate());
+		//Log(TEXT("  Max bitrate: %d"), encCaps->GetMaxBitrate());
 		//Log(TEXT("  Max priority: %d"), encCaps->GetMaxSupportedJobPriority());
 
-		std::stringstream str;
+		/*std::stringstream str;
 		str << "  Levels: ";
 		for (int i = 0; i < encCaps->GetNumOfSupportedLevels(); i++)
 		{
@@ -397,7 +440,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		{
 			str << encCaps->GetProfile(i) << " ";
 		}
-		Log(L"%S", str.str().c_str());
+		Log(L"%S", str.str().c_str());*/
 
 		amf::AMFIOCapsPtr iocaps;
 		encCaps->GetInputCaps(&iocaps);
@@ -407,10 +450,20 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 			bool native;
 			amf::AMF_MEMORY_TYPE memType;
 			iocaps->GetMemoryTypeAt(i, &memType, &native);
-			Log(TEXT("    %s, native: %s"), amf::AMFGetMemoryTypeName(memType),
+			Log(TEXT("    %s, native: %s"), trace->GetMemoryTypeName(memType),
 				native ? TEXT("Yes") : TEXT("No"));
 			if (native && (mNativeMemType == amf::AMF_MEMORY_UNKNOWN))
 				mNativeMemType = memType;
+		}
+
+		Log(TEXT("  Input formats:"));
+		for (int i = 0; i < iocaps->GetNumOfFormats(); i++)
+		{
+			amf_bool native;
+			amf::AMF_SURFACE_FORMAT fmt;
+			iocaps->GetFormatAt(i, &fmt, &native);
+			Log(TEXT("    %s, native: %s"), trace->SurfaceGetFormatName(fmt),
+				native ? TEXT("Yes") : TEXT("No"));
 		}
 
 		amf_int32 imin, imax;
@@ -418,6 +471,29 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		Log(TEXT("  Width min/max: %d/%d"), imin, imax);
 		iocaps->GetHeightRange(&imin, &imax);
 		Log(TEXT("  Height min/max: %d/%d"), imin, imax);
+
+		encCaps->GetOutputCaps(&iocaps);
+		Log(TEXT("  Output mem types:"));
+		for (int i = 0; i < iocaps->GetNumOfMemoryTypes(); i++)
+		{
+			bool native;
+			amf::AMF_MEMORY_TYPE memType;
+			iocaps->GetMemoryTypeAt(i, &memType, &native);
+			Log(TEXT("    %s, native: %s"), trace->GetMemoryTypeName(memType),
+				native ? TEXT("Yes") : TEXT("No"));
+			if (native && (mNativeMemType == amf::AMF_MEMORY_UNKNOWN))
+				mNativeMemType = memType;
+		}
+
+		Log(TEXT("  Output formats:"));
+		for (int i = 0; i < iocaps->GetNumOfFormats(); i++)
+		{
+			amf_bool native;
+			amf::AMF_SURFACE_FORMAT fmt;
+			iocaps->GetFormatAt(i, &fmt, &native);
+			Log(TEXT("    %s, native: %s"), trace->SurfaceGetFormatName(fmt),
+				native ? TEXT("Yes") : TEXT("No"));
+		}
 	}
 
 	Log(L"\r\nConverter props:\r\n----------------");
@@ -430,8 +506,7 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 fail:
 	if (res != AMF_OK)
 	{
-		LogMsg(true, L"AMF failed with error: %s", amf::AMFGetResultText(res));
-		Dbg(L"AMF failed with error: %s\n", amf::AMFGetResultText(res));
+		LogMsg(true, L"AMF failed with error: %d, %s", res, trace ? trace->GetResultText(res) : L"");
 	}
 	CompressEnd();
 	return ICERR_INTERNAL;
@@ -439,7 +514,6 @@ fail:
 
 DWORD CodecInst::CompressEnd(){
 	Log(L"CompressEnd");
-	Dbg(L"CompressEnd\n");
 	started = 0;
 	AMF_RESULT res = AMF_REPEAT;
 	mCLConv = !mConfigTable[S_DISABLE_OCL]; //reset as class instance is not always dtor'ed
@@ -481,6 +555,8 @@ DWORD CodecInst::CompressEnd(){
 
 	mDeviceCL.Terminate();
 	mDeviceDX11.Free();
+	mCompute.Release();
+	mComputeDev.Release();
 	return ICERR_OK;
 }
 
@@ -990,7 +1066,7 @@ bool DX11ComputeSubmitter::Init()
 
 	if (FAILED(pDev->CreateUnorderedAccessView(mTexStaging, &descUAV, &mUavNV12[0])))
 	{
-		Dbg(L"Failed to create NV12 texture luma uav\n");
+		mInstance->LogMsg(true, L"Failed to create NV12 texture luma uav\n");
 		return false;
 	}
 
@@ -998,7 +1074,7 @@ bool DX11ComputeSubmitter::Init()
 
 	if (FAILED(pDev->CreateUnorderedAccessView(mTexStaging, &descUAV, &mUavNV12[1])))
 	{
-		Dbg(L"Failed to create NV12 texture chroma uav\n");
+		mInstance->LogMsg(true, L"Failed to create NV12 texture chroma uav\n");
 		return false;
 	}
 
@@ -1026,7 +1102,7 @@ bool DX11ComputeSubmitter::loadComputeShader()
 
 	if (!hResource)
 	{
-		Dbg(L"Cannot load kernels source from resource.\n");
+		mInstance->LogMsg(true, L"Cannot load kernels source from resource.\n");
 		return false;
 	}
 
@@ -1044,7 +1120,7 @@ bool DX11ComputeSubmitter::loadComputeShader()
 			OutputDebugStringA((char*)pErrorBlob->GetBufferPointer());
 		SafeRelease(&pErrorBlob);
 		SafeRelease(&pBlob);
-
+		mInstance->LogMsg(true, L"D3DCompile failed with hr: %x", hr);
 		return false;
 	}
 

@@ -19,18 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "TestAMFVFW.h"
 
 #pragma comment(lib, "WinMM")
-#pragma comment(lib, "delayimp")
 #pragma comment(lib, "d3dcompiler.lib")
 
-#if _WIN64
-#define LIBEXT L"64"
-#pragma comment(lib, "amf-core-windesktop64")
-//#pragma comment(linker, "/DelayLoad:amf-core-windesktop64.dll")
-#else
-#define LIBEXT L"32"
-#pragma comment(lib, "amf-core-windesktop32.lib")
-//#pragma comment(linker, "/DELAYLOAD:amf-core-windesktop32.dll")
-#endif
 
 CRITICAL_SECTION lockCS;
 HMODULE hmoduleVFW = 0;
@@ -94,8 +84,6 @@ void AMF_STD_CALL amf_increase_timer_precision()
 
 CodecInst::CodecInst()
 	: mLog(nullptr)
-	, hModCore(nullptr)
-	, hModVCE(nullptr)
 	, fps_num(30)
 	, fps_den(1)
 	, mCLConv(true)
@@ -111,7 +99,7 @@ CodecInst::CodecInst()
 		fps_den = mConfigTable[S_FPS_DEN];
 	}
 #if _DEBUG
-	FindDLLs();
+	BindDLLs();
 #endif
 }
 
@@ -124,80 +112,30 @@ CodecInst::~CodecInst(){
 	}
 	catch (...) {};
 
-	if (hModCore)
+	if (hModRuntime)
 	{
-		FreeLibrary(hModCore);
-		hModCore = nullptr;
-	}
-
-	if (hModVCE)
-	{
-		FreeLibrary(hModVCE);
-		hModVCE = nullptr;
+		FreeLibrary(hModRuntime);
+		hModRuntime = nullptr;
+		AMFInit = nullptr;
+		AMFQueryVersion = nullptr;
 	}
 }
 
-bool CodecInst::FindDLLs()
+bool CodecInst::BindDLLs()
 {
-#define UTXT2(x) L##x
-#define UTXT(x) UTXT2(x)
-
-	HKEY hKey;
-	wchar_t path[4096] = { 0 };
-	DWORD i_size;
-	std::wstring dllPath, corePath, vcePath;
-
-	if (hModCore && hModVCE)
+	if (hModRuntime && AMFInit)
 		return true;
 
-	if (RegOpenKeyEx(OVE_REG_KEY, OVE_REG_PARENT TEXT("\\") OVE_REG_CHILD, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+	hModRuntime = LoadLibraryW(AMF_DLL_NAME);
+	if (hModRuntime)
 	{
-		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, OVE_REG_PARENT TEXT("\\") OVE_REG_CHILD, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
-		{
-			return false;
-		}
+		AMFInit = (AMFInit_Fn)GetProcAddress(hModRuntime, AMF_INIT_FUNCTION_NAME);
+		AMFQueryVersion = (AMFQueryVersion_Fn)GetProcAddress(hModRuntime, AMF_QUERY_VERSION_FUNCTION_NAME);
 	}
+	else
+		LogMsg(true, L"Failed to load AMF runtime DLL (%s)!", AMF_DLL_NAME);
 
-	i_size = sizeof(path);// / sizeof(path[0]);
-
-	//TCHAR *val = UTXT(S_INSTALL);
-	if (RegQueryValueExW(hKey, UTXT(S_INSTALL), 0, 0, (LPBYTE)&path, &i_size) != ERROR_SUCCESS)
-	{
-		LogMsg(true, L"Could not find AMF DLLs' install path from registry.");
-		goto quit;
-	}
-
-	dllPath.append(path);
-	if (!dllPath.length())
-	{
-		LogMsg(true, L"AMF DLLs' install path string in registry seems to be empty.");
-		goto quit;
-	}
-
-	if (dllPath.back() != L'\\' && dllPath.back() != L'/')
-	{
-		dllPath.append(L"\\");
-	}
-
-#if _DEBUG
-	dllPath.append(L"Dbg\\");
-#endif
-
-	corePath.append(dllPath);
-	corePath.append(L"amf-core-windesktop" LIBEXT L".dll");
-	vcePath.append(dllPath);
-	vcePath.append(L"amf-component-vce-windesktop" LIBEXT L".dll");
-
-	// XXX Kind of a roundabout way of telling /DELAYLOAD where to find the DLLs.
-	hModCore = LoadLibraryW(corePath.c_str());
-	hModVCE  = LoadLibraryW(vcePath.c_str());
-
-quit:
-	RegCloseKey(hKey);
-	return !!hModCore && !! hModVCE;
-
-#undef UTXT
-#undef UTXT2
+	return !!hModRuntime && !!AMFInit;
 }
 
 // some programs assume that the codec is not configurable if GetState
@@ -264,6 +202,9 @@ void CodecInst::LogMsg(bool msgBox, const wchar_t *psz_fmt, ...)
 {
 	va_list arg;
 	va_start(arg, psz_fmt);
+	Dbg_va(psz_fmt, arg);
+	Dbg(L"%s", L"\n");
+
 	if (mLog)
 	{
 		mLog->Log_internal(psz_fmt, arg);
