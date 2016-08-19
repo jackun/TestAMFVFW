@@ -70,22 +70,22 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(SolutionDir)GPUOpen-AMF\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProgramFiles)\AMD APP SDK\3.0\lib\x86;$(AMDAPPSDKROOT)\lib\x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(SolutionDir)GPUOpen-AMF\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProgramFiles)\AMD APP SDK\3.0\lib\x86_64;$(AMDAPPSDKROOT)\lib\x86_64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(SolutionDir)GPUOpen-AMF\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProgramFiles)\AMD APP SDK\3.0\lib\x86;$(AMDAPPSDKROOT)\lib\x86;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProgramFiles)\AMD APP SDK\3.0\include;$(AMDAPPSDKROOT)\include;$(SolutionDir)GPUOpen-AMF\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(ProgramFiles)\AMD APP SDK\3.0\lib\x86_64;$(AMDAPPSDKROOT)\lib\x86_64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -96,15 +96,17 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;TESTAMFVFW_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(USERPROFILE)\AMD Media SDK\1.1\inc;$(USERPROFILE)\AMD Media SDK\1.1\inc\amf\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
-      <AdditionalLibraryDirectories>$(USERPROFILE)\AMD Media SDK\1.1\lib\amf\x86\Debug\vs12;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <DelayLoadDLLs>amf-core-windesktop32.dll</DelayLoadDLLs>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
       <AdditionalDependencies>opencl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
@@ -120,15 +122,17 @@ copy $(TargetPath) ..\Bin32</Command>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;TESTAMFVFW_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(USERPROFILE)\AMD Media SDK\1.1\inc;$(USERPROFILE)\AMD Media SDK\1.1\inc\amf\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
-      <AdditionalLibraryDirectories>$(USERPROFILE)\AMD Media SDK\1.1\lib\amf\x86_64\Debug\vs12;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <DelayLoadDLLs>amf-core-windesktop64.dll</DelayLoadDLLs>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
       <AdditionalDependencies>opencl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
@@ -146,7 +150,7 @@ copy $(TargetPath) ..\Bin64</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;TESTAMFVFW_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(USERPROFILE)\AMD Media SDK\1.1\inc;$(USERPROFILE)\AMD Media SDK\1.1\inc\amf\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -154,8 +158,10 @@ copy $(TargetPath) ..\Bin64</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
-      <AdditionalLibraryDirectories>$(USERPROFILE)\AMD Media SDK\1.1\lib\amf\x86\Release\vs12;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <DelayLoadDLLs>amf-core-windesktop32.dll</DelayLoadDLLs>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
       <AdditionalDependencies>opencl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
@@ -173,7 +179,7 @@ copy $(TargetPath) ..\Bin32</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;TESTAMFVFW_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(USERPROFILE)\AMD Media SDK\1.1\inc;$(USERPROFILE)\AMD Media SDK\1.1\inc\amf\core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -181,8 +187,10 @@ copy $(TargetPath) ..\Bin32</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
-      <AdditionalLibraryDirectories>$(USERPROFILE)\AMD Media SDK\1.1\lib\amf\x86_64\Release\vs12;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <DelayLoadDLLs>amf-core-windesktop64.dll</DelayLoadDLLs>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
       <AdditionalDependencies>opencl.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
