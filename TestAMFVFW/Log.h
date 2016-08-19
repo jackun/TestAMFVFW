@@ -4,10 +4,13 @@
 #include <debugapi.h>
 #if _DEBUG
 #define Dbg(fmt, ...) OutDebug(fmt, ##__VA_ARGS__)
+#define Dbg_va(fmt, ...) OutDebug_va(fmt, ##__VA_ARGS__)
 #else
 #define Dbg(fmt, ...) do{}while(0)
+#define Dbg_va(fmt, ...) do{}while(0)
 #endif
 
+void OutDebug_va(const wchar_t* psz_fmt, const va_list args);
 void OutDebug(const wchar_t* psz_fmt, ...);
 
 struct Timing

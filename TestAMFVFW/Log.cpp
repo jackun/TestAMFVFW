@@ -10,7 +10,7 @@ Logger::Logger(bool _log) : mLog(NULL), mWritelog(_log)
 	}
 }
 
-int GetFmtSize(wchar_t *buf, const wchar_t *fmt, ...)
+int FmtTime(wchar_t *buf, const wchar_t *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -29,12 +29,12 @@ bool Logger::open()
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 
-	int sz = GetFmtSize(nullptr, fmt,
+	int sz = FmtTime(nullptr, fmt,
 		time.wYear, time.wMonth, time.wDay,
 		time.wHour, time.wMinute, time.wSecond);
 
 	std::vector<wchar_t> msg(sz);
-	GetFmtSize(&msg[0], fmt,
+	FmtTime(&msg[0], fmt,
 		time.wYear, time.wMonth, time.wDay,
 		time.wHour, time.wMinute, time.wSecond);
 
@@ -98,14 +98,19 @@ void Logger::enableLog(bool b)
 	if (!b) close();
 }
 
+void OutDebug_va(const wchar_t* psz_fmt, const va_list args)
+{
+	int bufsize = _vscwprintf(psz_fmt, args) + 1;
+	std::vector<wchar_t> msg(bufsize);
+	_vsnwprintf_s(msg.data(), bufsize, bufsize - 1, psz_fmt, args);
+	OutputDebugStringW(msg.data());
+}
+
 void OutDebug(const wchar_t* psz_fmt, ...)
 {
 	va_list args;
 	va_start(args, psz_fmt);
-	int bufsize = _vscwprintf(psz_fmt, args) + 1;
-	std::vector<wchar_t> msg(bufsize);
-	_vsnwprintf_s(&msg[0], bufsize, bufsize - 1, psz_fmt, args);
-	OutputDebugStringW(&msg[0]);
+	OutDebug_va(psz_fmt, args);
 	va_end(args);
 	
 }
