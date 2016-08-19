@@ -4,9 +4,6 @@
 #include <VersionHelpers.h>
 
 using hrc = std::chrono::high_resolution_clock;
-void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch);
-void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch);
-void BGRtoNV12(const uint8_t * src, uint8_t * yuv, unsigned bytesPerPixel, uint8_t flip, int srcFrameWidth, int srcFrameHeight, uint32_t yuvPitch);
 
 #define Log(...) LogMsg(false, __VA_ARGS__)
 #define AMFLOGIFFAILED(r, ...) \
@@ -182,7 +179,8 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 	}
 	started = 0;
 
-	if (int error = CompressQuery(lpbiIn, lpbiOut) != ICERR_OK){
+	int error = ICERR_OK;
+	if ((error = CompressQuery(lpbiIn, lpbiOut)) != ICERR_OK){
 		return error;
 	}
 
@@ -511,14 +509,15 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
 	BITMAPINFOHEADER *inhdr = icinfo->lpbiInput;
 	BITMAPINFOHEADER *outhdr = icinfo->lpbiOutput;
 	int frameType = -1;
+	DWORD icerr;
 
 	outhdr->biCompression = FOURCC_H264;
 
 	//mFrameNum = icinfo->lFrameNum;
 	if (icinfo->lFrameNum == 0){
 		if (started != 0x1337){
-			if (int error = CompressBegin(icinfo->lpbiInput, icinfo->lpbiOutput) != ICERR_OK)
-				return error;
+			if ((icerr = CompressBegin(icinfo->lpbiInput, icinfo->lpbiOutput)) != ICERR_OK)
+				return icerr;
 		}
 	}
 
@@ -526,7 +525,7 @@ DWORD CodecInst::Compress(ICCOMPRESS* icinfo, DWORD dwSize)
 		*icinfo->lpckid = 'cd'; // 'dc' Compressed video frame
 	}
 
-	DWORD icerr = mSubmitter->Submit(in, inhdr, mFrameDuration * icinfo->lFrameNum);
+	icerr = mSubmitter->Submit(in, inhdr, mFrameDuration * icinfo->lFrameNum);
 	if (icerr != ICERR_OK)
 		return icerr;
 
@@ -765,6 +764,7 @@ bool DX11Submitter::Init()
 		mInstance->mWidth, mInstance->mHeight, &surface);
 	if (res != AMF_OK)
 		return false;
+	mBufferCopyManager.Start(3);
 	return true;
 }
 
@@ -817,10 +817,14 @@ DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 
 				//memset(lockedRect.pData, 128, lockedRect.RowPitch * h * 3 / 2);
 				//BGRtoNV12((const uint8_t*)data, (uint8_t*)lockedRect.pData, inhdr->biBitCount / 8, 1, w, h, lockedRect.RowPitch);
-				if (inhdr->biBitCount == 24)
-					ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, lockedRect.RowPitch, h);
+				/*if (inhdr->biBitCount == 24)
+					ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, 0, lockedRect.RowPitch, h);
 				else
-					ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, lockedRect.RowPitch, h);
+					ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, 0, lockedRect.RowPitch, h);*/
+
+				mBufferCopyManager.SetData(data, lockedRect.pData, inhdr->biBitCount, w, h, lockedRect.RowPitch, h);
+				if (mBufferCopyManager.Wait() != WAIT_FAILED)
+					return ICERR_INTERNAL;
 
 				// Set useCPU to true
 				//if (!mInstance->mDeviceCL.ConvertBuffer(data, inhdr->biSizeImage, lockedRect.pData, lockedRect.RowPitch))
@@ -857,6 +861,7 @@ DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 	return ICERR_OK;
 }
 
+
 DWORD HostSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 {
 	amf::AMFSurfacePtr surface;
@@ -870,23 +875,23 @@ DWORD HostSubmitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 	int32_t hpitch = surface->GetPlaneAt(0)->GetHPitch();
 	int32_t vpitch = surface->GetPlaneAt(0)->GetVPitch();
 
+	mBufferCopyManager.SetData(data, dst, inhdr->biBitCount, w, h, hpitch, vpitch);
+	if (mBufferCopyManager.Wait() == WAIT_FAILED)
+		return ICERR_INTERNAL;
+
+	/*uint32_t hh = h / 2;
 	if (inhdr->biBitCount == 24)
-		ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, hpitch, vpitch);
+		ConvertRGB24toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, 0, hpitch, vpitch);
 	else
-		ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, hpitch, vpitch);
+	{
+		ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, 0, hh, hpitch, vpitch);
+		ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)dst, w, h, hh, h, hpitch, vpitch);
+	}*/
 
 	mInstance->mEncoder->SubmitInput(surface);
+
 	return ICERR_OK;
 }
-
-struct InputBuffer
-{
-	int inPitch;
-	int colorspace;
-	//IDK, 16byte align
-	int pad1;
-	int pad2;
-};
 
 bool DX11ComputeSubmitter::Init()
 {
@@ -919,7 +924,7 @@ bool DX11ComputeSubmitter::Init()
 		return false;
 	}
 
-	InputBuffer in;
+	ConstBuffer in;
 	in.inPitch = w;
 	in.colorspace = mInstance->mConfigTable[S_COLORPROF];
 
@@ -929,7 +934,7 @@ bool DX11ComputeSubmitter::Init()
 	InitData.SysMemSlicePitch = 0;
 
 	ZeroMemory(&descBuf, sizeof(descBuf));
-	descBuf.ByteWidth = sizeof(InputBuffer);
+	descBuf.ByteWidth = sizeof(ConstBuffer);
 	descBuf.Usage = D3D11_USAGE_DYNAMIC;
 	descBuf.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	descBuf.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -1028,7 +1033,11 @@ bool DX11ComputeSubmitter::loadComputeShader()
 	const char* source = (const char*)LoadResource(hmoduleVFW, hResource);
 	size_t srcSize = SizeofResource(hmoduleVFW, hResource);
 
-	HRESULT hr = D3DCompile(source, srcSize, nullptr, nullptr, nullptr, "CSMain", pProfile, dwShaderFlags, 0, &pBlob, &pErrorBlob);
+	bool colSpace = mInstance->mConfigTable[S_COLORPROF] == AMF_VIDEO_CONVERTER_COLOR_PROFILE_601;
+	D3D_SHADER_MACRO macros[] = { D3D_SHADER_MACRO { "BT601", colSpace ? "1" : "0" }, {} };
+
+	HRESULT hr = D3DCompile(source, srcSize, nullptr, macros,
+		nullptr, "CSMain", pProfile, dwShaderFlags, 0, &pBlob, &pErrorBlob);
 	if (FAILED(hr))
 	{
 		if (pErrorBlob)
@@ -1250,7 +1259,7 @@ void BGRtoNV12(const uint8_t * src,
 }
 
 // Rec.601
-void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch) {
+void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, size_t hpitch, size_t vpitch) {
 	const __m128i fraction = _mm_setr_epi32(0x84000, 0x84000, 0x84000, 0x84000);    //= 0x108000/2 = 0x84000
 	const __m128i neg32 = _mm_setr_epi32(-32, -32, -32, -32);
 	const __m128i y1y2_mult = _mm_setr_epi32(0x4A85, 0x4A85, 0x4A85, 0x4A85);
@@ -1261,12 +1270,12 @@ void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udes
 	const __m128i cybgr_64 = _mm_setr_epi16(0, 0x0c88, 0x4087, 0x20DE, 0x0c88, 0x4087, 0x20DE, 0);
 
 	for (unsigned int y = 0; y<h; y += 2) {
-		uint8_t *ydst = ydest + (h - y - 1) * hpitch;
+		uint8_t *ydst = ydest + ((sh + h) - y - 1) * hpitch;
 		//YV12
-		//uint8_t *udst = udest + (h - y - 2) / 2 * hpitch / 2;
-		//uint8_t *vdst = vdest + (h - y - 2) / 2 * hpitch / 2;
+		//uint8_t *udst = udest + ((sh + h) - y - 2) / 2 * hpitch / 2;
+		//uint8_t *vdst = vdest + ((sh + h) - y - 2) / 2 * hpitch / 2;
 		//NV12
-		uint8_t *uvdst = ydest + hpitch * vpitch + (h - y - 2) / 2 * hpitch;
+		uint8_t *uvdst = ydest + hpitch * vpitch + ((sh + h) - y - 2) / 2 * hpitch;
 
 		for (unsigned int x = 0; x<w; x += 4) {
 			__m128i rgb0 = _mm_cvtsi32_si128(*(int*)&src[y*w * 3 + x * 3]);
@@ -1375,7 +1384,7 @@ void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udes
 	}
 }
 
-void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, unsigned int w, unsigned int h, unsigned int hpitch, unsigned int vpitch) {
+void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, unsigned int w, unsigned int h, unsigned int sh, unsigned int eh, size_t hpitch, size_t vpitch) {
 	const __m128i fraction = _mm_setr_epi32(0x84000, 0x84000, 0x84000, 0x84000);    //= 0x108000/2 = 0x84000
 	const __m128i neg32 = _mm_setr_epi32(-32, -32, -32, -32);
 	const __m128i y1y2_mult = _mm_setr_epi32(0x4A85, 0x4A85, 0x4A85, 0x4A85);
@@ -1383,7 +1392,7 @@ void ConvertRGB32toNV12_SSE2(const unsigned char *src, unsigned char *ydest, uns
 	const __m128i fpix_mul = _mm_setr_epi32(0x1fb, 0x282, 0x1fb, 0x282);
 	const __m128i cybgr_64 = _mm_setr_epi16(0x0c88, 0x4087, 0x20DE, 0, 0x0c88, 0x4087, 0x20DE, 0);
 
-	for (unsigned int y = 0; y<h; y += 2) {
+	for (unsigned int y = sh; y < eh; y += 2) {
 		uint8_t *ydst = ydest + (h - y - 1) * hpitch;
 		//YV12
 		//uint8_t *udst = udest + (h - y - 2) / 2 * hpitch / 2;

@@ -75,6 +75,10 @@ enum RCM {
 amf_pts AMF_STD_CALL amf_high_precision_clock();
 void AMF_STD_CALL amf_increase_timer_precision();
 
+void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, unsigned int hpitch, unsigned int vpitch);
+void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, unsigned int w, unsigned int h, unsigned int sh, unsigned int eh, unsigned int hpitch, unsigned int vpitch);
+void BGRtoNV12(const uint8_t * src, uint8_t * yuv, unsigned bytesPerPixel, uint8_t flip, int srcFrameWidth, int srcFrameHeight, uint32_t yuvPitch);
+
 template <class T> void SafeRelease(T **ptr)
 {
 	if (ptr && *ptr)
@@ -221,7 +225,8 @@ class DX11Submitter : public Submitter
 public:
 	CodecInst *mInstance;
 	amf::AMFSurfacePtr surface;
-	ID3D11Texture2D *mTexStaging;
+	ID3D11Texture2D *mTexStaging = nullptr;
+	BufferCopyManager	mBufferCopyManager;
 	DX11Submitter(CodecInst *instance) : mInstance(instance)
 	{
 	}
@@ -241,24 +246,29 @@ public:
 // Can only do 32bit RGB
 class DX11ComputeSubmitter : public Submitter
 {
+	struct ConstBuffer
+	{
+		int inPitch;
+		int colorspace;
+		//IDK, 16byte align
+		int pad1;
+		int pad2;
+	};
+
 public:
 	CodecInst*			mInstance;
-	amf::AMFSurfacePtr	mSurface;
-	ID3D11Texture2D*	mTexStaging;
+	amf::AMFSurfacePtr	mSurface = nullptr;
+	ID3D11Texture2D*	mTexStaging = nullptr;
 
-	ID3D11Buffer*				mSrcBuffer;
-	ID3D11ShaderResourceView*	mSrcBufferView;
-	ID3D11DeviceContext*		mImmediateContext;
+	ID3D11Buffer*				mSrcBuffer = nullptr;
+	ID3D11ShaderResourceView*	mSrcBufferView = nullptr;
+	ID3D11DeviceContext*		mImmediateContext = nullptr;
 	ID3D11UnorderedAccessView	*mUavNV12[2] = { nullptr, nullptr };
-	ID3D11ComputeShader*		mComputeShader;
-	ID3D11Buffer* mConstantBuf;
+	ID3D11ComputeShader*		mComputeShader = nullptr;
+	ID3D11Buffer* mConstantBuf = nullptr;
 	BufferCopyManager mBufferCopyManager;
 
 	DX11ComputeSubmitter(CodecInst *instance) : mInstance(instance)
-		, mSrcBufferView(nullptr)
-		, mSrcBuffer(nullptr)
-		, mImmediateContext(nullptr)
-		, mConstantBuf(nullptr)
 	{
 	}
 
@@ -283,9 +293,18 @@ class HostSubmitter : public Submitter
 {
 public:
 	CodecInst*			mInstance;
+	BufferCopyManager	mBufferCopyManager;
+
 	HostSubmitter(CodecInst *instance) : mInstance(instance)
 	{
 	}
+
+	bool Init()
+	{
+		mBufferCopyManager.Start(3);
+		return true;
+	}
+
 	DWORD Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts);
 };
 

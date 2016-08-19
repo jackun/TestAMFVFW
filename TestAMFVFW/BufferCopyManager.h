@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <vector>
 
+void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, unsigned int hpitch, unsigned int vpitch);
+void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, unsigned int eh, unsigned int hpitch, unsigned int vpitch);
+
 //#define NUMTHREADS 3 // doesn't seem to scale beyond 2
 struct BufferCopyState
 {
@@ -10,6 +13,14 @@ struct BufferCopyState
 	uint8_t *pSrc;
 	uint8_t *pDst;
 	size_t size;
+
+	int bits;
+	size_t width;
+	size_t height;
+	size_t starty;
+	size_t endy;
+	size_t hpitch;
+	size_t vpitch;
 };
 
 struct BufferCopyManager
@@ -94,6 +105,34 @@ struct BufferCopyManager
 		}
 	}
 
+	void SetData(void *src, void *dst, int bits, size_t w, size_t h, size_t hpitch, size_t vpitch)
+	{
+		size_t threadcount = threads.size();
+		for (size_t i = 0; i < threadcount; i++)
+		{
+			state[i].bits = bits;
+			state[i].pSrc = (uint8_t*)src;
+			state[i].pDst = (uint8_t*)dst;
+			state[i].width = w;
+			state[i].height = h;
+			state[i].hpitch = hpitch;
+			state[i].vpitch = vpitch;
+
+			if (i < threadcount - 1)
+			{
+				state[i].starty = (h / threadcount) * i;
+				state[i].endy = (h / threadcount) * (i + 1);
+			}
+			else
+			{
+				state[i].starty = state[i - 1].endy;
+				state[i].endy = h;
+			}
+
+			SetEvent(state[i].sigCopy);
+		}
+	}
+
 	static DWORD WINAPI BufferCopyThread(LPVOID param)
 	{
 		BufferCopyState *state = static_cast<BufferCopyState*>(param);
@@ -102,7 +141,14 @@ struct BufferCopyManager
 			DWORD ret = WaitForSingleObject(state->sigCopy, INFINITE);
 			if (ret != WAIT_OBJECT_0 || state->pSrc == nullptr)
 				break;
-			memcpy(state->pDst, state->pSrc, state->size);
+
+			if (state->bits == 24)
+				ConvertRGB24toNV12_SSE2(state->pSrc, state->pDst, state->width, state->height, state->starty, state->hpitch, state->vpitch);
+			else if (state->bits == 32)
+				ConvertRGB32toNV12_SSE2(state->pSrc, state->pDst, state->width, state->height, state->starty, state->endy, state->hpitch, state->vpitch);
+			else
+				memcpy(state->pDst, state->pSrc, state->size);
+
 			SetEvent(state->sigDone);
 		}
 		return 0;
