@@ -1,11 +1,13 @@
 //                        B       G        R      +16.f/+128.f
-static float4 Yc601 = { 0.098f, 0.504f, 0.257f, 0.062745f };
-static float4 Uc601 = { 0.439f, -0.291f, -0.148f, 0.501961f };
-static float4 Vc601 = { -0.071f, -0.368f, 0.439f, 0.501961f };
-
-static float4 Yc709 = { 0.062007f, 0.614231f, 0.182586f, 0.062745f };
-static float4 Uc709 = { 0.439216f, -0.338572f, -0.100644f, 0.501961f };
-static float4 Vc709 = { -0.040274f, -0.398942f, 0.439216f, 0.501961f };
+#if BT601
+static float4 Ycoeff = { 0.098f, 0.504f, 0.257f, 0.062745f };
+static float4 Ucoeff = { 0.439f, -0.291f, -0.148f, 0.501961f };
+static float4 Vcoeff = { -0.071f, -0.368f, 0.439f, 0.501961f };
+#else //BT709
+static float4 Ycoeff = { 0.062007f, 0.614231f, 0.182586f, 0.062745f };
+static float4 Ucoeff = { 0.439216f, -0.338572f, -0.100644f, 0.501961f };
+static float4 Vcoeff = { -0.040274f, -0.398942f, 0.439216f, 0.501961f };
+#endif
 
 //R8B8G8A8
 StructuredBuffer<uint> Buffer0 : register(t0);
@@ -38,19 +40,6 @@ void CSMain( uint3 dispatchThreadID : SV_DispatchThreadID )
 	uint w, h;
 	BufferY.GetDimensions(w, h);
 	float4 px[4];
-	float4 Ycoeff, Ucoeff, Vcoeff;
-	if (colorspace == 0)
-	{
-		Ycoeff = Yc601;
-		Ucoeff = Uc601;
-		Vcoeff = Vc601;
-	}
-	else
-	{
-		Ycoeff = Yc709;
-		Ucoeff = Uc709;
-		Vcoeff = Vc709;
-	}
 
 	for (int j = 0; j < 2; j++)
 	for (int i = 0; i < 2; i++)
