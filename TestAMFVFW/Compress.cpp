@@ -823,7 +823,7 @@ DWORD DX11Submitter::Submit(void *data, BITMAPINFOHEADER *inhdr, amf_int64 pts)
 					ConvertRGB32toNV12_SSE2((const uint8_t*)data, (uint8_t*)lockedRect.pData, w, h, 0, lockedRect.RowPitch, h);*/
 
 				mBufferCopyManager.SetData(data, lockedRect.pData, inhdr->biBitCount, w, h, lockedRect.RowPitch, h);
-				if (mBufferCopyManager.Wait() != WAIT_FAILED)
+				if (mBufferCopyManager.Wait() == WAIT_FAILED)
 					return ICERR_INTERNAL;
 
 				// Set useCPU to true
