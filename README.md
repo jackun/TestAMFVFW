@@ -2,11 +2,13 @@
 
 Testing, testing...
 
-VFW glue using AMD's Media SDK (AMF) aka encode video using VCE.
+VFW glue using AMD's GPUOpen Advanced Media Framework (AMF) SDK aka encode video using VCE.
+
+May need Crimson 16.7.3 or newer drivers.
 
 # Installing
 
-Click `Download ZIP` and unpack somewhere permanent. Codec needs to find the AMF DLLs from the `Runtimes` folder.
+Click `Clone or download` > `Download ZIP` and unpack somewhere.
 
 **You may need to install [MSVC++ 2015 runtimes](https://www.microsoft.com/en-us/download/details.aspx?id=48145).**
 
