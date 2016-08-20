@@ -92,8 +92,11 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, amf::AMFCompute *amfCompute, int 
 	mAlignedHeight = ((height + (32 - 1)) & ~(32 - 1));
 	mUsingAMFCompute = !!amfCompute;
 
-	if (!amfCompute && !FindPlatformID(platformID))
-		return false;
+	if (!amfCompute)
+	{
+		if (!FindPlatformID(platformID))
+			return false;
+	}
 	else
 	{
 		size_t sz = 0;
@@ -273,8 +276,8 @@ bool DeviceOCL::Init(ID3D11Device *pD3DDevice, amf::AMFCompute *amfCompute, int 
 	imgf.image_channel_order = CL_RG;
 	imgf.image_channel_data_type = CL_UNSIGNED_INT8;
 
-	int uv_width = mAlignedWidth / 2;
-	int uv_height = (mAlignedHeight + 1) / 2;
+	size_t uv_width = mAlignedWidth / 2;
+	size_t uv_height = mAlignedHeight / 2;
 
 	mOutImgUV = clCreateImage2D(mContext,
 		CL_MEM_WRITE_ONLY /*| CL_MEM_USE_PERSISTENT_MEM_AMD*/,
@@ -313,8 +316,8 @@ bool DeviceOCL::InitBGRAKernels(int bpp)
 	//mKernelUV = clCreateKernel(mProgram, kernels[kernel][1], &status);
 	//RETURNIFERROR(status, L"clCreateKernel(UV) failed!\n");
 
-	int inSize = mWidth * mHeight * bpp / 8 + ((mWidth * bpp / 8) % 4) * mHeight;
-	int inSizeAligned = (inSize + 255) & ~255; //unnecessary? necessary for pinned memory
+	size_t inSize = mWidth * mHeight * bpp / 8 + ((mWidth * bpp / 8) % 4) * mHeight;
+	size_t inSizeAligned = (inSize + 255) & ~255; //unnecessary? necessary for pinned memory
 
 	mInBuf = clCreateBuffer(
 		mContext,
@@ -464,11 +467,11 @@ bool DeviceOCL::ConvertBuffer(void *inBuf, size_t size, void* dest, size_t destP
 			uint8_t *pSrcUV = (uint8_t *)pUV;
 			uint8_t* pDst = (uint8_t*)dest;
 
-			for (int y = 0; y < mHeight; y++, pSrcY += image_row_pitchY, pDst += destPitch)
+			for (size_t y = 0; y < mHeight; y++, pSrcY += image_row_pitchY, pDst += destPitch)
 				memcpy(pDst, pSrcY, mWidth);
 
 			pDst = (uint8_t*)dest + destPitch * mHeight;
-			for (int y = 0; y < mHeight / 2; y++, pSrcUV += image_row_pitchUV, pDst += destPitch)
+			for (size_t y = 0; y < mHeight / 2; y++, pSrcUV += image_row_pitchUV, pDst += destPitch)
 				memcpy(pDst, pSrcUV, mWidth);
 		}
 

@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "DeviceOCL.h"
 #include "Log.h"
 #include "Colorspace.h"
+#include "Conversion.h"
 
 /* Registry */
 #define OVE_REG_KEY    HKEY_CURRENT_USER
@@ -100,10 +101,6 @@ enum RCM {
 amf_pts AMF_STD_CALL amf_high_precision_clock();
 void AMF_STD_CALL amf_increase_timer_precision();
 
-void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, unsigned int hpitch, unsigned int vpitch);
-void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, unsigned int w, unsigned int h, unsigned int sh, unsigned int eh, unsigned int hpitch, unsigned int vpitch);
-void BGRtoNV12(const uint8_t * src, uint8_t * yuv, unsigned bytesPerPixel, uint8_t flip, int srcFrameWidth, int srcFrameHeight, uint32_t yuvPitch);
-
 template <class T> void SafeRelease(T **ptr)
 {
 	if (ptr && *ptr)
@@ -167,7 +164,7 @@ private:
 	UINT32 mIDRPeriod;
 	DWORD  mCompressedSize;
 	bool mCLConv;
-	Submitter *mSubmitter;
+	std::unique_ptr<Submitter> mSubmitter;
 
 	/* ICM_COMPRESS_FRAMES_INFO params */
 	int frame_total;

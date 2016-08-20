@@ -36,6 +36,9 @@
     <ClCompile Include="DeviceOCL.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Conversion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -63,6 +66,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="BufferCopyManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Conversion.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

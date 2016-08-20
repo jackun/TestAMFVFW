@@ -43,7 +43,7 @@ private:
 	cl_kernel mKernelY, mKernelUV;
 	cl_program mProgram;
 	cl_mem mInBuf, mOutImgY, mOutImgUV, mBuffY, mBuffUV;
-	int mWidth, mHeight, mAlignedWidth, mAlignedHeight;
+	size_t mWidth, mHeight, mAlignedWidth, mAlignedHeight;
 	BufferCopyManager mBufferCopyManager;
 	bool mUsingAMFCompute = false;
 };

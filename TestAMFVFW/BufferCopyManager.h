@@ -2,9 +2,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include <vector>
-
-void ConvertRGB24toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, unsigned int hpitch, unsigned int vpitch);
-void ConvertRGB32toNV12_SSE2(const uint8_t *src, uint8_t *ydest, /*uint8_t *udest, uint8_t *vdest, */unsigned int w, unsigned int h, unsigned int sh, unsigned int eh, unsigned int hpitch, unsigned int vpitch);
+#include "Conversion.h"
 
 //#define NUMTHREADS 3 // doesn't seem to scale beyond 2
 struct BufferCopyState
@@ -62,7 +60,7 @@ struct BufferCopyManager
 			if (state[i].sigCopy != INVALID_HANDLE_VALUE)
 				SetEvent(state[i].sigCopy);
 		}
-		WaitForMultipleObjects(threads.size(), threads.data(), TRUE, 3001); //Join threads
+		WaitForMultipleObjects((DWORD)threads.size(), threads.data(), TRUE, 3001); //Join threads
 
 		for (size_t i = 0; i < state.size(); i++)
 		{
@@ -77,7 +75,7 @@ struct BufferCopyManager
 
 	DWORD Wait()
 	{
-		return WaitForMultipleObjects(evtHandles.size(), evtHandles.data(), TRUE, 10000);
+		return WaitForMultipleObjects((DWORD)evtHandles.size(), evtHandles.data(), TRUE, 10000);
 	}
 
 	void SetData(void *src, void *dst, size_t size)
@@ -143,7 +141,7 @@ struct BufferCopyManager
 				break;
 
 			if (state->bits == 24)
-				ConvertRGB24toNV12_SSE2(state->pSrc, state->pDst, state->width, state->height, state->starty, state->hpitch, state->vpitch);
+				ConvertRGB24toNV12_SSE2(state->pSrc, state->pDst, state->width, state->height, state->starty, state->endy, state->hpitch, state->vpitch);
 			else if (state->bits == 32)
 				ConvertRGB32toNV12_SSE2(state->pSrc, state->pDst, state->width, state->height, state->starty, state->endy, state->hpitch, state->vpitch);
 			else

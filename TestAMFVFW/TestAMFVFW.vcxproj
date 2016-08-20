@@ -201,6 +201,7 @@ copy $(TargetPath) ..\Bin64</Command>
   <ItemGroup>
     <ClCompile Include="Compress.cpp" />
     <ClCompile Include="Configure.cpp" />
+    <ClCompile Include="Conversion.cpp" />
     <ClCompile Include="DeviceDX11.cpp" />
     <ClCompile Include="DeviceOCL.cpp" />
     <ClCompile Include="drvproc.cpp" />
@@ -211,6 +212,7 @@ copy $(TargetPath) ..\Bin64</Command>
     <ClInclude Include="BufferCopyManager.h" />
     <ClInclude Include="Colorspace.h" />
     <ClInclude Include="ComPtr.h" />
+    <ClInclude Include="Conversion.h" />
     <ClInclude Include="DeviceDX11.h" />
     <ClInclude Include="DeviceOCL.h" />
     <ClInclude Include="Log.h" />
