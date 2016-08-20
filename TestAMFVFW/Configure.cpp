@@ -225,6 +225,52 @@ void CodecInst::InitSettings()
 	mConfigTable[S_CONVTYPE] = 0;
 }
 
+void CodecInst::SaveState(VfwState &state)
+{
+	state.log = mConfigTable[S_LOG];
+	state.cabac = mConfigTable[S_CABAC];
+	state.rcm = mConfigTable[S_RCM];
+	state.preset = mConfigTable[S_PRESET];
+	state.profile = mConfigTable[S_PROFILE];
+	state.level = mConfigTable[S_LEVEL];
+	state.idr = mConfigTable[S_IDR];
+	state.gop = mConfigTable[S_GOP];
+	state.bitrate = mConfigTable[S_BITRATE];
+	state.qpi = mConfigTable[S_QPI];
+	state.qp_min = mConfigTable[S_QP_MIN];
+	state.qp_max = mConfigTable[S_QP_MAX];
+	state.colorprof = mConfigTable[S_COLORPROF];
+	state.device = mConfigTable[S_DEVICEIDX];
+	state.fps_num = mConfigTable[S_FPS_NUM];
+	state.fps_den= mConfigTable[S_FPS_DEN];
+	state.fps_enabled = mConfigTable[S_FPS_ENABLED];
+	state.disable_ocl = mConfigTable[S_DISABLE_OCL];
+	state.convtype = mConfigTable[S_CONVTYPE];
+}
+
+void CodecInst::LoadState(const VfwState &state)
+{
+	mConfigTable[S_LOG] = state.log;
+	mConfigTable[S_CABAC] = state.cabac;
+	mConfigTable[S_RCM] = state.rcm;
+	mConfigTable[S_PRESET] = state.preset;
+	mConfigTable[S_PROFILE] = state.profile;
+	mConfigTable[S_LEVEL] = state.level;
+	mConfigTable[S_IDR] = state.idr;
+	mConfigTable[S_GOP] = state.gop;
+	mConfigTable[S_BITRATE] = state.bitrate;
+	mConfigTable[S_QPI] = state.qpi;
+	mConfigTable[S_QP_MIN] = state.qp_min;
+	mConfigTable[S_QP_MAX] = state.qp_max;
+	mConfigTable[S_COLORPROF] = state.colorprof;
+	mConfigTable[S_DEVICEIDX] = state.device;
+	mConfigTable[S_FPS_NUM] = state.fps_num;
+	mConfigTable[S_FPS_DEN] = state.fps_den;
+	mConfigTable[S_FPS_ENABLED] = state.fps_enabled;
+	mConfigTable[S_DISABLE_OCL] = state.disable_ocl;
+	mConfigTable[S_CONVTYPE] = state.convtype;
+}
+
 bool CodecInst::ReadRegistry()
 {
 	HKEY    hKey;

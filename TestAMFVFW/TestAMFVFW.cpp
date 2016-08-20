@@ -143,23 +143,31 @@ bool CodecInst::BindDLLs()
 DWORD CodecInst::GetState(LPVOID pv, DWORD dwSize){
 	Dbg(L"GetState\n");
 	if (pv == NULL){
-		return 1;
+		return sizeof(VfwState);
 	}
-	else if (dwSize < 1){
+	else if (dwSize < sizeof(VfwState)){
 		return ICERR_BADSIZE;
 	}
-	memset(pv, 0, 1);
-	return 1;
+
+	VfwState state;
+	SaveState(state);
+	memcpy(pv, &state, sizeof(VfwState));
+	return ICERR_OK;
 }
 
 // See GetState comment
 DWORD CodecInst::SetState(LPVOID pv, DWORD dwSize) {
 	Dbg(L"SetState\n");
-	if (pv){
-		return ICERR_OK;
+	if (pv && dwSize == sizeof(VfwState)){
+
+		VfwState state;
+		memcpy(&state, pv, sizeof(VfwState));
+		LoadState(state);
+
+		return sizeof(VfwState);
 	}
 	else {
-		return 1;
+		return 0;
 	}
 }
 

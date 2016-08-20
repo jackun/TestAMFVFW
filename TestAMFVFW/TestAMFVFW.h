@@ -65,6 +65,31 @@ extern CRITICAL_SECTION lockCS;
 
 #define S_INSTALL     "InstallPath"
 
+struct VfwState
+{
+	uint8_t log : 1;
+	uint8_t cabac : 1;
+	uint8_t rcm : 2;
+	uint8_t preset : 2;
+	uint8_t colorprof : 2;
+
+	uint8_t fps_enabled : 1;
+	uint8_t disable_ocl : 1;
+	uint8_t convtype : 6;
+
+	uint8_t profile;
+	uint8_t level;
+	uint8_t idr;
+	uint8_t gop;
+	uint32_t bitrate;
+	uint8_t qpi;
+	uint8_t qp_min;
+	uint8_t qp_max;
+	uint8_t device;
+	uint8_t fps_num;
+	uint8_t fps_den;
+};
+
 enum RCM {
 	RCM_CQP = 0,
 	RCM_CBR,
@@ -151,6 +176,8 @@ private:
 
 	bool BindDLLs();
 	void PrintProps(amf::AMFPropertyStorage *props);
+	void SaveState(VfwState &state);
+	void LoadState(const VfwState &state);
 
 public:
 	DeviceDX11 mDeviceDX11;
