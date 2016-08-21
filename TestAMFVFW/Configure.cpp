@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <CommCtrl.h>
 
 //FIXME Proper maximum, 100 Mbps with 4.1+ level, probably
-#define MAX_BITRATE 50000 //kbit/s
+#define MAX_BITRATE 100000 //kbit/s
 #define MAX_QUANT 51 //0...51 for I/P/B
 
 static bool firstInit = true;
@@ -361,7 +361,7 @@ static void DialogUpdate(HWND hwndDlg, CodecInst* pinst) {
 			{ S_QPB_DELTA, IDC_QPB_DELTA, IDC_QPB_DELTA_SPIN, 4, 0, 51 },*/
 		};
 
-		for (auto v : spinners)
+		for (auto& v : spinners)
 		{
 			int32_t val = pinst->mConfigTable[v.param];
 			val = val < v.min ? v.def : (val > v.max ? v.def : val);
