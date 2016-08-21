@@ -422,23 +422,30 @@ DWORD CodecInst::CompressBegin(LPBITMAPINFOHEADER lpbiIn, LPBITMAPINFOHEADER lpb
 		};
 		Log(TEXT("Capabilities:"));
 		Log(TEXT("  Accel type: %s"), accelType[(encCaps->GetAccelerationType() + 1) % 4]);
-		//Log(TEXT("  Max bitrate: %d"), encCaps->GetMaxBitrate());
-		//Log(TEXT("  Max priority: %d"), encCaps->GetMaxSupportedJobPriority());
 
-		/*std::stringstream str;
-		str << "  Levels: ";
-		for (int i = 0; i < encCaps->GetNumOfSupportedLevels(); i++)
+		std::vector<std::pair<const wchar_t*, const wchar_t*>> capVals = {
+			{AMF_VIDEO_ENCODER_CAP_MAX_BITRATE, L"Max bitrate"},
+			{AMF_VIDEO_ENCODER_CAP_NUM_OF_STREAMS, L"Num of streams"},
+			{AMF_VIDEO_ENCODER_CAP_MAX_PROFILE, L"Max profile"},
+			{AMF_VIDEO_ENCODER_CAP_MAX_LEVEL, L"Max level"},
+			{AMF_VIDEO_ENCODER_CAP_BFRAMES, L"B-frames supported"},
+			{AMF_VIDEO_ENCODER_CAP_MIN_REFERENCE_FRAMES, L"Min reference frames"},
+			{AMF_VIDEO_ENCODER_CAP_MAX_REFERENCE_FRAMES, L"Max reference frames"},
+			{AMF_VIDEO_ENCODER_CAP_MAX_TEMPORAL_LAYERS, L"Max temporal layers"},
+			{AMF_VIDEO_ENCODER_CAP_FIXED_SLICE_MODE, L"Fixed slice mode"},
+			{AMF_VIDEO_ENCODER_CAP_NUM_OF_HW_INSTANCES, L"Num of HW instances"}
+		};
+
+		amf_int64 val;
+		for (auto& capVal : capVals)
 		{
-			amf_uint32 level = encCaps->GetLevel(i);
-			str << level << " ";
+			if (encCaps->GetProperty(capVal.first, &val) == AMF_OK)
+			{
+				Log(L"  %s: %lld", capVal.second, val);
+			}
 		}
 
-		str << "\r\n  Profiles: ";
-		for (int i = 0; i < encCaps->GetNumOfSupportedProfiles(); i++)
-		{
-			str << encCaps->GetProfile(i) << " ";
-		}
-		Log(L"%S", str.str().c_str());*/
+		//PrintProps(encCaps);
 
 		amf::AMFIOCapsPtr iocaps;
 		encCaps->GetInputCaps(&iocaps);
