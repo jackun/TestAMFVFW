@@ -17,9 +17,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "stdafx.h"
 #include "TestAMFVFW.h"
+#include <VersionHelpers.h>
 
 #pragma comment(lib, "WinMM")
-#pragma comment(lib, "d3dcompiler.lib")
+//#pragma comment(lib, "d3dcompiler.lib")
 
 
 CRITICAL_SECTION lockCS;
@@ -112,6 +113,13 @@ CodecInst::~CodecInst(){
 	}
 	catch (...) {};
 
+	if (hD3DCompiler)
+	{
+		FreeLibrary(hD3DCompiler);
+		hD3DCompiler = nullptr;
+		pfn_D3DCompile = nullptr;
+	}
+
 	if (hModRuntime)
 	{
 		FreeLibrary(hModRuntime);
@@ -135,6 +143,12 @@ bool CodecInst::BindDLLs()
 	else
 		LogMsg(true, L"Failed to load AMF runtime DLL (%s)!", AMF_DLL_NAME);
 
+	if (IsWindows8OrGreater() && !hD3DCompiler)
+	{
+		hD3DCompiler = LoadLibraryA("D3DCOMPILER_47.DLL");
+		if (hD3DCompiler)
+			pfn_D3DCompile = (decltype(pfn_D3DCompile))GetProcAddress(hD3DCompiler, "D3DCompile");
+	}
 	return !!hModRuntime && !!AMFInit;
 }
 

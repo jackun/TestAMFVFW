@@ -176,6 +176,39 @@ private:
 	void SaveState(VfwState &state);
 	void LoadState(const VfwState &state);
 
+	//Argh, no ref counting so just dump it here
+	HINSTANCE hD3DCompiler = nullptr;
+	decltype(&D3DCompile) pfn_D3DCompile = nullptr;
+
+	HRESULT WINAPI
+		D3DCompile(_In_reads_bytes_(SrcDataSize) LPCVOID pSrcData,
+			_In_ SIZE_T SrcDataSize,
+			_In_opt_ LPCSTR pSourceName,
+			_In_reads_opt_(_Inexpressible_(pDefines->Name != NULL)) CONST D3D_SHADER_MACRO* pDefines,
+			_In_opt_ ID3DInclude* pInclude,
+			_In_opt_ LPCSTR pEntrypoint,
+			_In_ LPCSTR pTarget,
+			_In_ UINT Flags1,
+			_In_ UINT Flags2,
+			_Out_ ID3DBlob** ppCode,
+			_Out_opt_ ID3DBlob** ppErrorMsgs)
+	{
+		if (pfn_D3DCompile)
+			return pfn_D3DCompile(pSrcData,
+				SrcDataSize,
+				pSourceName,
+				pDefines,
+				pInclude,
+				pEntrypoint,
+				pTarget,
+				Flags1,
+				Flags2,
+				ppCode,
+				ppErrorMsgs);
+
+		return E_INVALIDARG;
+	}
+
 public:
 	DeviceDX11 mDeviceDX11;
 	std::map<std::string, int32_t> mConfigTable;

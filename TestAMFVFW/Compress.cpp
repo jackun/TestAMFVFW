@@ -1116,7 +1116,7 @@ bool DX11ComputeSubmitter::loadComputeShader()
 	bool colSpace = mInstance->mConfigTable[S_COLORPROF] == AMF_VIDEO_CONVERTER_COLOR_PROFILE_601;
 	D3D_SHADER_MACRO macros[] = { D3D_SHADER_MACRO { "BT601", colSpace ? "1" : "0" }, {} };
 
-	HRESULT hr = D3DCompile(source, srcSize, nullptr, macros,
+	HRESULT hr = mInstance->D3DCompile(source, srcSize, nullptr, macros,
 		nullptr, "CSMain", pProfile, dwShaderFlags, 0, &pBlob, &pErrorBlob);
 	if (FAILED(hr))
 	{
