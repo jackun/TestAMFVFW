@@ -9,7 +9,7 @@
 // 
 // MIT license 
 // 
-// Copyright (c) 2016 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2017 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,32 +31,37 @@
 //
 
 //-------------------------------------------------------------------------------------------------
-// AMFFAudioConverterFFMPEG  interface declaration
+// Desktop duplication interface declaration
 //-------------------------------------------------------------------------------------------------
 
-#ifndef __AMFAudioConverterFFMPEG_h__
-#define __AMFAudioConverterFFMPEG_h__
-
+#ifndef __AMFDISPLAYCAPTURE__
+#define __AMFDISPLAYCAPTURE__
 #pragma once
 
+#include "public/include/components/Component.h"
 
-#define FFMPEG_AUDIO_CONVERTER    L"AudioConverterFFMPEG"
+#define AMFDisplayCapture L"AMFDisplayCapture"
 
+// Static properties
+//
+// Index of the display monitor
+// - Monitor index is determined by using EnumAdapters() in DX11.
+#define AMF_DISPLAYCAPTURE_MONITOR_INDEX			L"InMonitorIndex"         // amf_int64 (default = 0)
+// Capture frame rate
+#define AMF_DISPLAYCAPTURE_FRAMERATE				L"InFrameRate"            // amf_int64 (default = 60)
+// Optional interface object for getting current time.
+#define AMF_DISPLAYCAPTURE_CURRENT_TIME_INTERFACE	L"CurrentTimeInterface"
+// Capture format
+#define AMF_DISPLAYCAPTURE_FORMAT					L"CurrentFormat"
 
-#define AUDIO_CONVERTER_IN_AUDIO_BIT_RATE             L"In_BitRate"                 // amf_int64 (default = 128000)
-#define AUDIO_CONVERTER_IN_AUDIO_SAMPLE_RATE          L"In_SampleRate"              // amf_int64 (default = 0)
-#define AUDIO_CONVERTER_IN_AUDIO_CHANNELS             L"In_Channels"                // amf_int64 (default = 2)
-#define AUDIO_CONVERTER_IN_AUDIO_SAMPLE_FORMAT        L"In_SampleFormat"            // amf_int64 (default = AMFAF_UNKNOWN)  (AMF_AUDIO_FORMAT)
-#define AUDIO_CONVERTER_IN_AUDIO_CHANNEL_LAYOUT       L"In_ChannelLayout"           // amf_int64 (default = 0)
-#define AUDIO_CONVERTER_IN_AUDIO_BLOCK_ALIGN          L"In_BlockAlign"              // amf_int64 (default = 0)
-
-#define AUDIO_CONVERTER_OUT_AUDIO_BIT_RATE            L"Out_BitRate"                // amf_int64 (default = 128000)
-#define AUDIO_CONVERTER_OUT_AUDIO_SAMPLE_RATE         L"Out_SampleRate"             // amf_int64 (default = 0)
-#define AUDIO_CONVERTER_OUT_AUDIO_CHANNELS            L"Out_Channels"               // amf_int64 (default = 2)
-#define AUDIO_CONVERTER_OUT_AUDIO_SAMPLE_FORMAT       L"Out_SampleFormat"           // amf_int64 (default = AMFAF_UNKNOWN)  (AMF_AUDIO_FORMAT)
-#define AUDIO_CONVERTER_OUT_AUDIO_CHANNEL_LAYOUT      L"Out_ChannelLayout"          // amf_int64 (default = 0)
-#define AUDIO_CONVERTER_OUT_AUDIO_BLOCK_ALIGN         L"Out_BlockAlign"             // amf_int64 (default = 0)
-
-
-
-#endif //#ifndef __AMFAudioConverterFFMPEG_h__
+extern "C"
+{
+	// Component that allows the desktop to be captured:
+	// - DX11 only and the device must be created with IDXGIFactory1 or later support
+	// - The monitor display must not be rotated.  See DDAPISource.cpp
+	// - Component will fail to initialize on Windows 7 as the Desktop Duplication API
+	// is not supported
+	//
+	AMF_RESULT AMF_CDECL_CALL AMFCreateComponentDisplayCapture(amf::AMFContext* pContext, amf::AMFComponent** ppComponent);
+}
+#endif // #ifndef __AMFDISPLAYCAPTURE__
