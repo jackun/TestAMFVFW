@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <emmintrin.h> 
 #include <stdio.h>
 #include <algorithm>
 #include <string>
@@ -41,7 +42,3 @@ inline bool ends_with(std::string const & value, std::string const & ending)
 #include "core\Factory.h"
 #include "components\VideoEncoderVCE.h"
 #include "components\VideoConverter.h"
-
-//Copied from Media SDK
-#include "components\VideoConverterCaps.h"
-#include "components\VideoEncoderVCECaps.h"
